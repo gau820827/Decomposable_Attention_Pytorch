@@ -21,7 +21,7 @@ class NgramChar(object):
         super(NgramChar, self).__init__()
         self.name = name
         self.chars2index = {'<PAD>': 0}
-        self.index2chars = {1: '<PAD>'}
+        self.index2chars = {0: '<PAD>'}
         self.ngram = n
         self.n_chars = 1
 
