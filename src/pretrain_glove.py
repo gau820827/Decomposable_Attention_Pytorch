@@ -19,13 +19,16 @@
 # 1. False should only add OOV if OOV is usually
 # 
 # First, use the blank split then do the tokne(find out the http and www)
+# 
+# Command line to conver jupyter notebook to py: $ jupyter nbconvert --to script pretrain_glove.ipynb
+# 
 
 # # process
 # N-GRAM encoding: 
 # 
 # paralex pretrain:(noisy-pretrain)
 
-# In[34]:
+# In[25]:
 
 # %%writefile pretrain_glove.py
 import pprint
@@ -33,19 +36,21 @@ import numpy as np
 from operator import itemgetter
 import re
 import nltk
+import random
 # nltk.download('punkt')
 
 
-# In[20]:
+# In[14]:
 
 emb_size = 50
 pretrain_filename = 'glove.6B.50d.txt'
 document_filename = 'a.txt'
 document_filename = 'quora_duplicate_questions.tsv'
 ignore = True 
+batch_size = 32
 
 
-# In[21]:
+# In[3]:
 
 glove_home = './'
 sst_home = './'
@@ -83,12 +88,12 @@ loaded_embeddings = np.vstack((loaded_embeddings, (2 * np.random.random_sample((
 data_set = load_sst_data(sst_home + document_filename)
 
 
-# In[ ]:
+# In[4]:
 
 # data_set
 
 
-# In[23]:
+# In[5]:
 
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -101,7 +106,7 @@ train_set, validation_set = train_test_sp(train_set)
 
 # Give the model embedding word vectors: token and to vector
 
-# In[28]:
+# In[6]:
 
 def ignore_OOV(toke, ignore, emb_size, loaded_embeddings, words): 
     '''decide how to deal with OOV'''
@@ -152,44 +157,64 @@ def sentence2vec(data_set, ignore, emb_size, loaded_embeddings):
 matrix, loaded_embeddings = sentence2vec(train_set, ignore, emb_size, loaded_embeddings)
 
 
-# In[ ]:
+# In[16]:
 
-print(matrix.shape)
+#print(matrix.shape)
+# print(type(matrix))
+# print(len(matrix))
+# print(len(loaded_embeddings))
+# matrix[0][0]
 
 
 # Pipeline, that is batch
 
-# In[ ]:
+# In[100]:
 
-def  batch_iter(nonzero_pairs, cooccurrences, batch_size):
+def  batch_iter(matrix, batch_size):
     start = -1 * batch_size
-    dataset_size = len(nonzero_pairs)
+    dataset_size = len(matrix)
     order = list(range(dataset_size))
     random.shuffle(order)
 
     while True:
         start += batch_size
-        word_i = []
-        word_j = []
-        counts = []
-        
+        p1 = []
+        p2 = []
+        p1_2vec = []
+        p2_2vec = []
+        label = []
         if start > dataset_size - batch_size:
             # Start another epoch.
             #a = 3
             start = 0
             random.shuffle(order)
         batch_indices = order[start:start + batch_size]
-        batch = [nonzero_pairs[index] for index in batch_indices]
-        for k in batch:
-            counts.append(cooccurrences[k])
-            word_i.append(k[0])
-            word_j.append(k[1])
-        yield [counts, word_i, word_j]
+        batch = [matrix[index] for index in batch_indices]
+#         print(len(batch))
+#         print(batch[4][4])
+        for i,k in enumerate(batch):
+#             print(k)
+#             print(k[0])
+#             print(k[4])
+            p1.append(k[0])
+            p1_2vec.append(k[1])
+            p2.append(k[2])
+            p2_2vec.append(k[3])
+            label.append(k[4])
+        yield [p1, p2, p1_2vec, p2_2vec, label]
+        
+data_iter = batch_iter(matrix, batch_size)
 
 
-# In[ ]:
+# In[103]:
 
-# data_iter = batch_iter(nonzero_pairs, cooccurrences, batch_size)
+# w = next(data_iter)
+
+
+# In[107]:
+
+# print(len(w))
+# len(w[0])
 
 
 # In[ ]:
