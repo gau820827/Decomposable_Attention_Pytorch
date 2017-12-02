@@ -199,7 +199,7 @@ class pretrain():
 
 # In[24]:
 
-pt = pretrain(emb_size,pretrain_filename,document_filename,ignore,batch_size)
+# pt = pretrain(emb_size,pretrain_filename,document_filename,ignore,batch_size)
 # path = './' + document_filename
 # data_set = pt.load_sst_data
 
