@@ -190,11 +190,11 @@ class pretrain():
 
 # In[28]:
 
-emb_size = 50
-pretrain_filename = 'glove.6B.50d.txt'
-document_filename = 'quora_duplicate_questions.tsv'
-ignore = True 
-batch_size = 32
+# emb_size = 50
+# pretrain_filename = 'glove.6B.50d.txt'
+# document_filename = 'quora_duplicate_questions.tsv'
+# ignore = True 
+# batch_size = 32
 
 
 # In[24]:
@@ -219,48 +219,48 @@ pt = pretrain(emb_size,pretrain_filename,document_filename,ignore,batch_size)
 
 # In[25]:
 
-data_iter = pt.batch_iter(pt.matrix, pt.batch_size)
+# data_iter = pt.batch_iter(pt.matrix, pt.batch_size)
 
 
 # In[26]:
 
-test = next(data_iter)
+# test = next(data_iter)
 
 
 # In[11]:
 
-print(type(test[1]))
-print(type(test[1][31]))
-print(type(test[4]))
-print(test[4][0])
-print((test[0]))
-print((test[4]))
-print(type(test[4][31]))
+# print(type(test[1]))
+# print(type(test[1][31]))
+# print(type(test[4]))
+# print(test[4][0])
+# print((test[0]))
+# print((test[4]))
+# print(type(test[4][31]))
 
 
 # In[44]:
 
-print(type(torch.LongTensor(test[0])))
-print(type(torch.FloatTensor(test[0])))
-print(type(torch.from_numpy(test[0][1])))
-print(type(torch.from_numpy(test[0][2])))
-print(type(torch.from_numpy(test[0][3])))
-print(type(torch.from_numpy(test[0][4])))
+# print(type(torch.LongTensor(test[0])))
+# print(type(torch.FloatTensor(test[0])))
+# print(type(torch.from_numpy(test[0][1])))
+# print(type(torch.from_numpy(test[0][2])))
+# print(type(torch.from_numpy(test[0][3])))
+# print(type(torch.from_numpy(test[0][4])))
 
 
 # In[32]:
 
-print(type((test[0][0])))
-print(type((test[0][1])))
-print(type((test[0][2])))
-print(type((test[0][3])))
-print(type((test[0][4])))
-print(type(test[0]))
+# print(type((test[0][0])))
+# print(type((test[0][1])))
+# print(type((test[0][2])))
+# print(type((test[0][3])))
+# print(type((test[0][4])))
+# print(type(test[0]))
 
 
 # In[153]:
 
-test[1][0]
+# test[1][0]
 
 
 # In[ ]:
