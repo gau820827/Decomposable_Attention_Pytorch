@@ -1,7 +1,13 @@
 
 # coding: utf-8
 
-# In[1]:
+# under the working environemtn
+# 
+# Command line to conver jupyter notebook to py: $ jupyter nbconvert --to script pretrain_glove.ipynb
+# 
+# 
+
+# In[31]:
 
 import pprint
 import numpy as np
@@ -14,15 +20,20 @@ from sklearn.model_selection import train_test_split
 import torch
 
 
-# In[27]:
+# In[33]:
 
 class pretrain():
 #     pretrain(emb_size, pretrain_filename, document_filename, ignore = True, batch_size = 32):
-    '''emb_size = 50
+    '''
+    emb_size = 50
     pretrain_filename = 'glove.6B.50d.txt'
     document_filename = 'quora_duplicate_questions.tsv'
     ignore = True 
-    batch_size = 32'''
+    batch_size = 32
+    '''
+    '''
+    Document file is located(path) in the same file, could be modified if you need to do so
+    '''
     def __init__(self, emb_size, pretrain_filename, document_filename, ignore, batch_size):
         
         glove_home = './'
@@ -124,10 +135,17 @@ class pretrain():
                 continue
         return sentence2vec, loaded_embeddings
 
-    def  batch_iter(self, matrix, batch_size):
-        '''please input: pt.matrix and pt.batch_size'''
-        '''This is for batch'''
-        '''Out put is: [(p1_pad_list), (p2_pad_list), p1_str, p2_str, (label)]'''
+    def batch_iter(self, matrix, batch_size):
+        '''
+        return a batch: list w and all have been already converted to tensor
+        default batch size 32
+        w[0,1,2,3,4]
+        w[0]: p1_vector
+        w[1]: p2_vector
+        w[2]: p1_string
+        w[3]: p2_string
+        w[4]: label
+        '''
         start = -1 * batch_size
         dataset_size = len(matrix)
         order = list(range(dataset_size))
@@ -158,38 +176,33 @@ class pretrain():
 
                 p2.append(k[2])
                 p2_2vec.append(k[3])
-                #
+
                 label.append(int(k[4]))
 
             max_length_p1 = np.max(p1_length_list)
             max_length_p2 = np.max(p2_length_list)
-
+            print('max_length_p1', max_length_p1)
+            print('max_length_p2', max_length_p2)
             p1_pad_list = []
             p2_pad_list = []
             for i,k in enumerate(batch):
                 p1_padded_vec = np.pad(np.array(k[1]), 
-                                        pad_width=((0,max_length_p1-len(k[1]))), 
+                                        pad_width=(((0,max_length_p1-len(k[1]))),(0,0)), 
                                         mode="constant", constant_values=0)
+
                 p1_pad_list.append(p1_padded_vec)
-#                 p1_pad_list.append(torch.from_numpy(p1_padded_vec))
 
                 p2_padded_vec = np.pad(np.array(k[3]), 
-                            pad_width=((0,max_length_p2-len(k[3]))), 
-                                mode="constant", constant_values=0)
-#                 p2_pad_list.append(torch.from_numpy(p2_padded_vec))
+                                        pad_width=(((0,max_length_p2-len(k[3]))),(0,0)), 
+                                        mode="constant", constant_values=0)
                 p2_pad_list.append(p2_padded_vec)
 
-            yield [p1_pad_list, p2_pad_list, p1, p2, torch.LongTensor(label)]
-    
-#             yield [torch.LongTensor(p1_pad_list), torch.LongTensor(p2_pad_list), p1, p2, torch.LongTensor(label)]
-#             yield [(np.array(p1_pad_list)), (np.array(p2_pad_list)), p1, p2, torch.LongTensor(label)]
-#             yield [torch.from_numpy(np.array(p1_pad_list)), torch.from_numpy(np.array(p2_pad_list)), p1, p2, torch.LongTensor(label)]
-#             yield [torch.from_numpy(p1_pad_list), torch.from_numpy(p2_pad_list), p1, p2, torch.LongTensor(label)]
-#             yield [torch.FloatTensor((p1_pad_list)), torch.FloatTensor((p2_pad_list)), p1, p2, torch.LongTensor(label)]
+            yield [torch.from_numpy(np.asarray(p1_pad_list)), torch.from_numpy(np.asarray(p2_pad_list)), p1, p2, torch.LongTensor(label)]
 
 
-# In[28]:
+# In[34]:
 
+##### This is demo #####
 # emb_size = 50
 # pretrain_filename = 'glove.6B.50d.txt'
 # document_filename = 'quora_duplicate_questions.tsv'
@@ -197,70 +210,17 @@ class pretrain():
 # batch_size = 32
 
 
-# In[24]:
+# In[41]:
 
+##### This is demo #####
 # pt = pretrain(emb_size,pretrain_filename,document_filename,ignore,batch_size)
-# path = './' + document_filename
-# data_set = pt.load_sst_data
-
-
-# In[26]:
-
-# train_set, validation_set, test_set = pt.train_test_sp()
-
-
-# In[27]:
-
-# len(pt.words)
-# len(pt.test_set)
-# len(pt.loaded_embeddings)
-# type(pt.matrix)
-
-
-# In[25]:
-
 # data_iter = pt.batch_iter(pt.matrix, pt.batch_size)
-
-
-# In[26]:
-
 # test = next(data_iter)
-
-
-# In[11]:
-
-# print(type(test[1]))
-# print(type(test[1][31]))
-# print(type(test[4]))
-# print(test[4][0])
-# print((test[0]))
-# print((test[4]))
-# print(type(test[4][31]))
-
-
-# In[44]:
-
-# print(type(torch.LongTensor(test[0])))
-# print(type(torch.FloatTensor(test[0])))
-# print(type(torch.from_numpy(test[0][1])))
-# print(type(torch.from_numpy(test[0][2])))
-# print(type(torch.from_numpy(test[0][3])))
-# print(type(torch.from_numpy(test[0][4])))
-
-
-# In[32]:
-
-# print(type((test[0][0])))
-# print(type((test[0][1])))
-# print(type((test[0][2])))
-# print(type((test[0][3])))
-# print(type((test[0][4])))
-# print(type(test[0]))
-
-
-# In[153]:
-
-# test[1][0]
+# p1_vec = test[0]
+# p2_vec = test[1]
+# p1_str = test[2]
+# p2_str = test[3]
+# label = test[4]
 
 
 # In[ ]:
