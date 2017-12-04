@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 
 from charNgram import NgramChar
+from pretrain import pretrain
 
 
 class DecomposableAttention(nn.Module):
@@ -85,7 +86,6 @@ class _Attend(nn.Module):
 
     def forward(self, x1, x2):
         # Unnormalized attend weights
-
         fa = self.f(x1)
         fb = self.f(x2)
         e = torch.exp(torch.matmul(fa, torch.transpose(fb, 1, 2)))
@@ -97,7 +97,7 @@ class _Attend(nn.Module):
             n = n.view(-1, 1)
 
             seq = [torch.div(x, n[idx, :]).view(1, -1) for idx, x in enumerate(e[:, i, :])]
-            val = torch.cat(seq, dim=0).view((2, -1, 1))
+            val = torch.cat(seq, dim=0).view((x1.size()[0], -1, 1))
             val = torch.mul(val, x2)
             val = torch.sum(val, dim=1)
             beta[i] = val
@@ -110,7 +110,7 @@ class _Attend(nn.Module):
             n = n.view(-1, 1)
 
             seq = [torch.div(x, n[idx, :]).view(1, -1) for idx, x in enumerate(e[:, :, j])]
-            val = torch.cat(seq, dim=0).view((2, -1, 1))
+            val = torch.cat(seq, dim=0).view((x2.size()[0], -1, 1))
             val = torch.mul(val, x1)
             val = torch.sum(val, dim=1)
             alpha[j] = val
@@ -188,15 +188,17 @@ def mini_test():
     hidden_dim = 200
     output_dim = 2
 
-    # minitest uses a batch of 2 pairs with length 10 and 5
-    a = np.random.random_sample((2, 10, embedding_dim))
-    b = np.random.random_sample((2, 5, embedding_dim))
-    a = Variable(torch.FloatTensor(a))
-    b = Variable(torch.FloatTensor(b))
+    # minitest uses a batch of 3 pairs with length 10 and 5
+    a = np.random.random_sample((2, 7, embedding_dim))
+    b = np.random.random_sample((2, 8, embedding_dim))
+    a = Variable(torch.DoubleTensor(a))
+    b = Variable(torch.DoubleTensor(b))
     target = Variable(torch.LongTensor([1, 0]))
 
     model = DecomposableAttention(embedding_dim, hidden_dim, output_dim)
 
+    # Set the parameter to double type
+    model.double()
     mini_train(a, b, target, model)
 
 
@@ -248,6 +250,84 @@ def charngram_test():
 
     mini_train(a, b, target, model)
 
+
+## TODO: 1. Complete the training loop.
+##       2. Run the training script.
+def train_iter(model, data_iter, iter_time):
+    """Training loop."""
+    optimizer = optim.Adam(model.parameters())
+    lossf = nn.CrossEntropyLoss()
+
+    for i in range(iter_time):
+        # catch the data
+        p1_vec, p2_vec, p1_str, p2_str, label = next(data_iter)
+        p1_vec = Variable(p1_vec)
+        p2_vec = Variable(p2_vec)
+
+        label = Variable(label)
+        model.zero_grad()
+        out = model(p1_vec, p2_vec)
+
+        loss = lossf(out, label)
+        loss.backward()
+        optimizer.step()
+
+
+def train(embedding_dim, hidden_dim, output_dim, batch_size,
+          usepretrain, pretrain_emb_size, pretrain_filename,
+          document_filename, ignore):
+    """The core part of training the model.
+
+    First, we will initialize the model based on given parameters.
+    Second, we will decide whether to use pre-train word vector or not.
+    Third, we load the dataset.
+
+    """
+    model = DecomposableAttention(embedding_dim, hidden_dim, output_dim)
+
+    if usepretrain:
+        pt = pretrain(pretrain_emb_size, pretrain_filename, document_filename,
+                      ignore, batch_size)
+        data_iter = pt.batch_iter(pt.matrix, pt.batch_size)
+        test = next(data_iter)
+
+    print("Data loaded......")
+
+    p1_vec, p2_vec, p1_str, p2_str, label = test
+
+    p1_vec = Variable(p1_vec)
+    p2_vec = Variable(p2_vec)
+    label = Variable(label)
+
+    model.double()
+    # mini_train(p1_vec, p2_vec, label, model)
+    train_iter(model, data_iter, 100)
+
+
 if __name__ == '__main__':
-    mini_test()
-    charngram_test()
+
+    # Parameters for loading pre-train word
+    usepretrain = True
+    pretrain_emb_size = 50
+    pretrain_filename = './pretrainvec/glove/glove_small.txt'
+    document_filename = './data/small_quora.tsv'
+    ignore = True
+
+    # Parameter for core model
+    embedding_dim = 50
+    hidden_dim = 200
+    output_dim = 2
+
+    # Parameter for data batching
+    batch_size = 32
+
+    test = False
+
+    # Function Test
+    if test is True:
+        mini_test()
+        charngram_test()
+
+    # Main train loop
+    train(embedding_dim, hidden_dim, output_dim, batch_size, usepretrain,
+          pretrain_emb_size, pretrain_filename, document_filename, ignore)
