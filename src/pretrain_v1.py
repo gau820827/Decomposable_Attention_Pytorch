@@ -3,9 +3,7 @@
 
 # under the working environemtn
 # 
-# Command line to conver jupyter notebook to py: $ jupyter nbconvert --to script pretrain_glove.ipynb
-# 
-# 
+# Command line to conver jupyter notebook to py: $ jupyter nbconvert --to script pretrain_v1.ipynb
 
 # In[104]:
 
@@ -20,7 +18,7 @@ from sklearn.model_selection import train_test_split
 import torch
 
 
-# In[139]:
+# In[3]:
 
 class pretrain():
 #     pretrain(emb_size, pretrain_filename_path, document_filename, ignore = True, batch_size = 32):
@@ -171,7 +169,7 @@ class pretrain():
                     continue
             return sentence2vec
     
-    def batch_iter(self, matrix, batch_size, use_pretrain):
+    def batch_iter(self, matrix, batch_size, use_pretrain, reuse):
         '''
         return a batch: list w and all have been already converted to tensor
         default batch size 32
@@ -181,6 +179,7 @@ class pretrain():
         w[2]: p1_string
         w[3]: p2_string
         w[4]: label
+        reuse: True or False, if False, the bacth would runout and throw 'StopIteration'
         '''
         start = -1 * batch_size
         dataset_size = len(matrix)
@@ -197,10 +196,14 @@ class pretrain():
                 label = []
                 p1_length_list = []
                 p2_length_list = []
-
+                
                 if start > dataset_size - batch_size:
-                    start = 0
-                    random.shuffle(order)
+                    if reuse is True:
+                        start = 0
+                        random.shuffle(order)
+                    else:
+                        return
+
                 batch_indices = order[start:start + batch_size]
                 batch = [matrix[index] for index in batch_indices]
                 for i,k in enumerate(batch):
@@ -253,7 +256,83 @@ class pretrain():
                     p2.append(k[1]) 
                     label.append(k[2])
                     
-                yield [p1, p2, label]
+                yield [[], [], p1, p2, label]
+                
+    def eval_model_all(data_iter, model):
+        """
+        1. input variable_1, variable_2, model
+        2. put (v1 and v2) into model 
+        3. return the accuracy: this is for all batch
+
+        """
+        correct = 0
+        total = 0
+
+        model.eval()
+
+        while True:
+            try:
+                p1_vec, p2_vec, p1_str, p2_str, label  = next(data_iter)
+
+                p1_vec = Variable(p1_vec)
+                p2_vec = Variable(p2_vec)
+
+                outputs = model(p1_vec, p2_vec)
+                predicted = (outputs.data > 0.5).long().view(-1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum()
+
+            except StopIteration:
+                model.train()
+                break
+            model.train()
+
+        return (100 * correct / total)
+        
+
+
+# In[6]:
+
+# def eval_model_all(data_iter, model):
+#     """
+#     1. input variable_1, variable_2, model
+#     2. put (v1 and v2) into model
+#     3. return the accuracy: this is for all batch
+    
+#     """
+#     correct = 0
+#     total = 0
+    
+#     model.eval()
+    
+#     while True:
+#         try:
+#             p1_vec, p2_vec, p1_str, p2_str, label  = next(data_iter)
+            
+#             p1_vec = Variable(p1_vec)
+#             p2_vec = Variable(p2_vec)
+            
+#             outputs = model(p1_vec, p2_vec)
+#             predicted = (outputs.data > 0.5).long().view(-1)
+#             total += labels.size(0)
+#             correct += (predicted == labels).sum()
+            
+#         except StopIteration:
+#             model.train()
+#             break
+#         model.train()
+        
+#     return (100 * correct / total)
+
+
+# #     for data, lengths, labels in data_iter:
+# #         data_batch, length_batch, label_batch = Variable(data), Variable(lengths), Variable(labels)
+# #         outputs = model(p1_vec, p2_vec)
+# #         predicted = (outputs.data > 0.5).long().view(-1)
+# #         total += labels.size(0)
+# #         correct += (predicted == labels).sum()
+# #     model.train()
+# #     return (100 * correct / total)
 
 
 # In[149]:
