@@ -1,5 +1,3 @@
-<<<<<<< HEAD
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
 import pprint
 import numpy as np
 from operator import itemgetter
@@ -10,10 +8,9 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import torch
 
-<<<<<<< HEAD
 import torch.nn as nn
 from torch.autograd import Variable
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
 class pretrain():
 #     pretrain(emb_size, pretrain_filename_path, document_filename, ignore = True, batch_size = 32):
     '''
@@ -26,15 +23,15 @@ class pretrain():
     '''
     Document file is located(path) in the same file, could be modified if you need to do so
     '''
-<<<<<<< HEAD
+
     def __init__(self, emb_size, pretrain_filename, document_filename, ignore, batch_size, use_pretrain):
         ###change this route after test
         glove_home = './pretrainvec/'
         sst_home = './data/'
         # glove_home = './pretrainvec/'
         # sst_home = document_filename
-        
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
+
         self.emb_size = emb_size
         self.pretrain_filename = pretrain_filename
         self.ignore = ignore
@@ -43,12 +40,12 @@ class pretrain():
 
         ''' read pretrain glove file '''
         ''' return train_set, validation_set, test_set'''
-<<<<<<< HEAD        
+
         if(use_pretrain is True):
             ###change this route after test
             with open(glove_home + self.pretrain_filename) as f:
             # with open(self.pretrain_filename) as f:
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
                 load = f.readlines()
                 words_to_load = len(load)
 
@@ -71,7 +68,7 @@ class pretrain():
                 self.idx2words[len(self.words)+1] = 'UNK'
                 ###change###
                 self.loaded_embeddings = np.vstack((self.loaded_embeddings, (2 * np.random.random_sample((1, self.emb_size)) - 1)))
-<<<<<<< HEAD
+
         ###change this route after test
         self.train_set = self.load_sst_data(sst_home + 'train.tsv')
         self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
@@ -79,7 +76,7 @@ class pretrain():
         # self.train_set = self.load_sst_data(sst_home)
         # self.validation_set = self.load_sst_data(sst_home)
         # self.test_set = self.load_sst_data(sst_home)
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
 
         self.train_set = self.load_sst_data(sst_home + 'small_train.tsv')
         # self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
@@ -106,7 +103,7 @@ class pretrain():
             for i, line in enumerate(text):
                 text_1 = re.sub(r'\s*(\(\d)|(\))\s*', '', line)
                 text_1 = re.split(r'\t+', text_1)
-<<<<<<< HEAD
+
                 example['text'] = text_1[0:-1]
                 data.append(example)
                 ###should open this part after testing###
@@ -114,7 +111,7 @@ class pretrain():
                 # example['text'] = reverse_example
                 # data.append(example)
                 
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
         return data
 
     def train_test_sp(self, data_set):
@@ -161,12 +158,11 @@ class pretrain():
                     except KeyError:
                         x, loaded_embeddings = self.ignore_OOV(toke_2, ignore, emb_size, loaded_embeddings, self.words)
                         p_2_vec.append(x)
-<<<<<<< HEAD
+
 
                 sentence2vec.append([p_1, p_1_vec, p_2, p_2_vec, label])
 
-            
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
             except IndexError:
                 continue
         return sentence2vec, loaded_embeddings
@@ -178,7 +174,7 @@ class pretrain():
             sentence2vec = []
             print('I am here')
             for pair in data_set:
-<<<<<<< HEAD
+
                 try:#
                     p_1, p_2, label = pair['text'][1], pair['text'][2],pair['text'][0]
                     # p_1_tok, p_2_tok = nltk.word_tokenize(p_1),nltk.word_tokenize(p_2)
@@ -190,7 +186,7 @@ class pretrain():
             return sentence2vec
     
     def batch_iter(self, matrix, batch_size, use_pretrain, reuse = True):
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
         '''
         return a batch: list w and all have been already converted to tensor
         default batch size 32
@@ -219,13 +215,13 @@ class pretrain():
                 p2_length_list = []
                 
                 if start > dataset_size - batch_size:
-<<<<<<< HEAD
+
                     if reuse is True:
                         start = 0
                         random.shuffle(order)
                     else:
                         return
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
 
                 batch_indices = order[start:start + batch_size]
                 batch = [matrix[index] for index in batch_indices]
@@ -251,7 +247,7 @@ class pretrain():
                 # print('max_length_p2', max_length_p2)
                 p1_pad_list = []
                 p2_pad_list = []
-<<<<<<< HEAD
+
                 for i,k in enumerate(batch):
 #                     p1_padded_vec = np.pad(np.array(k[1]), 
 #                                             pad_width=(((0,max_length_p1-len(k[1]))),(0,0)), 
@@ -271,7 +267,7 @@ class pretrain():
                     p2_padded_vec = np.pad(np.array(k[3]), 
                                            pad_width=((0, max_length_p2 - len(k[3]))), 
                                            mode="constant", constant_values=0)
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
                     p2_pad_list.append(p2_padded_vec)
 
                 yield [torch.from_numpy(np.asarray(p1_pad_list)),
@@ -285,21 +281,21 @@ class pretrain():
                 label = []
 
                 if start > dataset_size - batch_size:
-<<<<<<< HEAD
+
                     if reuse is True:
                         start = 0
                         random.shuffle(order)
                     else:
                         return
                     
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
+
                 batch_indices = order[start:start + batch_size]
                 batch = [matrix[index] for index in batch_indices]
                 for i, k in enumerate(batch):
                     p1.append(k[0])
                     p2.append(k[1])
                     label.append(k[2])
-<<<<<<< HEAD
+
                     
                 yield [[], [], p1, p2, label]
                 
@@ -386,7 +382,6 @@ class pretrain():
 # #         correct += (predicted == labels).sum()
 # #     model.train()
 # #     return (100 * correct / total)
->>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
 
 
 # In[149]:
