@@ -62,7 +62,7 @@ class pretrain():
 
                 self.loaded_embeddings = np.vstack((self.loaded_embeddings, (2 * np.random.random_sample((1, self.emb_size)) - 1)))
 
-        self.train_set = self.load_sst_data(sst_home + 'small_train.tsv')
+        self.train_set = self.load_sst_data(sst_home + 'train.tsv')
         self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
         self.test_set = self.load_sst_data(sst_home + 'test.tsv')
 
