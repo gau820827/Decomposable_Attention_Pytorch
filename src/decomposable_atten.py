@@ -35,13 +35,15 @@ class DecomposableAttention(nn.Module):
         self.embedding_model = mode
 
         vocab_size = loaded_embeddings.shape[0]
-        self.embeddings = nn.Embedding(vocab_size + 1, embedding_dim, padding_idx = 0)
+        self.embeddings = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.embeddings.weight = nn.Parameter(torch.from_numpy(loaded_embeddings).float())
 
-        # self.projection = nn.Linear(embedding_dim, embedding_dim)
+        # self.projection = nn.Linear(embedding_dim, hidden_dim)
         self.attend = _Attend(embedding_dim, hidden_dim)
         self.compare = _Compare(embedding_dim, hidden_dim)
         self.aggregate = _Aggregate(embedding_dim, hidden_dim, output_dim)
+
+        # m.weight.requires_grad=False
 
     def forward(self, x1, x2):
         """ The forward process of the core model.
@@ -305,6 +307,7 @@ def train_iter(model, data_iter, iter_time):
     lossf = nn.CrossEntropyLoss()
 
     print('Start Training!')
+    total_loss = 0
     for iteration in range(1, iter_time + 1):
         # catch the data
         p1_vec, p2_vec, p1_str, p2_str, label = next(data_iter)
@@ -325,8 +328,11 @@ def train_iter(model, data_iter, iter_time):
         loss.backward()
         optimizer.step()
 
+        total_loss += loss.data[0]
+
         if iteration % GET_LOSS == 0:
-            print("Iter %i : Loss %f" % (iteration, loss.data[0]))
+            print("Iter %i : Avg Loss %f" % (iteration, total_loss / GET_LOSS))
+            total_loss = 0
 
         if iteration % SAVE_MODEL == 0:
             torch.save(model.state_dict(), "{}_{}".format(OUTPUT_FILE, iteration))

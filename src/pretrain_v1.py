@@ -1,26 +1,15 @@
-import pprint
+"""The file to load the data."""
 import numpy as np
-from operator import itemgetter
 import re
 import nltk
 import random
-import numpy as np
-from sklearn.model_selection import train_test_split
-import torch
 
-import torch.nn as nn
+import torch
 from torch.autograd import Variable
 
 
 class pretrain():
-#     pretrain(emb_size, pretrain_filename_path, document_filename, ignore = True, batch_size = 32):
-    '''
-    emb_size = 50
-    pretrain_filename = 'glove.6B.50d.txt'
-    document_filename = 'quora_duplicate_questions.tsv'
-    ignore = True
-    batch_size = 32
-    '''
+
     '''
     Document file is located(path) in the same file, could be modified if you need to do so
     '''
@@ -45,8 +34,11 @@ class pretrain():
                 words_to_load = len(load)
 
                 self.loaded_embeddings = np.zeros((words_to_load, self.emb_size))
-                self.words = {}
-                self.idx2words = {}
+                self.words2idx = {'PAD': 0, 'UNK': 1}
+                self.idx2words = {0: 'PAD', 1: 'UNK'}
+                self.vocab_size = 2
+
+                # Read the embddings
                 for i, line in enumerate(load):
                     s = line.split()
 
@@ -54,21 +46,20 @@ class pretrain():
 
                     word = ' '.join(s[:-emb_size])
 
-                    self.words[word] = i + 1
-                    self.idx2words[i + 1] = word
+                    self.words2idx[word] = self.vocab_size
+                    self.idx2words[self.vocab_size] = word
+                    self.vocab_size += 1
 
-                self.words['UNK'] = len(self.words) + 1
-                self.idx2words[len(self.words) + 1] = 'UNK'
+                self.loaded_embeddings = np.vstack([np.random.uniform(-1, 1, (2, self.emb_size)),
+                                                   self.loaded_embeddings])
 
-                self.loaded_embeddings = np.vstack((self.loaded_embeddings, (2 * np.random.random_sample((1, self.emb_size)) - 1)))
-
-        self.train_set = self.load_sst_data(sst_home + 'train.tsv')
+        self.train_set = self.load_sst_data(sst_home + 'small_train.tsv')
         self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
         self.test_set = self.load_sst_data(sst_home + 'test.tsv')
 
         # Only train return loaded_embeddings; the others would not catch the loaded_embeddings
         if (use_pretrain is True):
-            self.matrix_train, self.loaded_embeddings = self.sentence2vec(self.train_set, self.ignore, self.emb_size, self.loaded_embeddings)
+            self.matrix_train = self.sentence2vec(self.train_set, self.ignore, self.emb_size, self.loaded_embeddings)
             # self.matrix_validation, x = self.sentence2vec(self.validation_set, self.ignore, self.emb_size, self.loaded_embeddings)
             # self.matrix_test, y = self.sentence2vec(self.test_set, self.ignore, self.emb_size, self.loaded_embeddings)
         else:
@@ -94,21 +85,17 @@ class pretrain():
                 data.append([text_1[0], text_1[2], text_1[1]])
         return data
 
-    def train_test_sp(self, data_set):
-        train_set, test_set = train_test_split(data_set, test_size=0.17)
-        return train_set, test_set
-
-    def ignore_OOV(self, toke, ignore, emb_size, loaded_embeddings, words): 
-        '''decide how to deal with OOV'''
-        '''if ignore is Flase, each OOV assign different vector'''
-        '''if ignore is True, each OOV assign the same vector'''
-        if ignore is False:
-            ###len(words) should plus 1, since leaving 0 for padding###
-            words[toke] = len(words) + 1
-            loaded_embeddings = np.concatenate((loaded_embeddings, (2 * np.random.random_sample((1, emb_size)) - 1)), axis=0)
-        else:
-            toke = 'UNK'
-        return loaded_embeddings[words[toke]], loaded_embeddings
+    # def ignore_OOV(self, toke, ignore, emb_size, loaded_embeddings, words): 
+    #     '''decide how to deal with OOV'''
+    #     '''if ignore is Flase, each OOV assign different vector'''
+    #     '''if ignore is True, each OOV assign the same vector'''
+    #     if ignore is False:
+    #         ###len(words) should plus 1, since leaving 0 for padding###
+    #         words[toke] = len(words) + 1
+    #         loaded_embeddings = np.concatenate((loaded_embeddings, (2 * np.random.random_sample((1, emb_size)) - 1)), axis=0)
+    #     else:
+    #         toke = 'UNK'
+    #     return loaded_embeddings[words[toke]], loaded_embeddings
 
     def sentence2vec(self, data_set, ignore, emb_size, loaded_embeddings):
         '''add UNK to the embedding'''
@@ -122,28 +109,28 @@ class pretrain():
                 p_1_vec = []
                 p_2_vec = []
 
+                # Translate the token to index
                 for toke_1 in p_1_tok:
                     toke_1 = toke_1.lower()
                     try:
-                        ### return index instead returning vector###
-                        p_1_vec.append(self.words[toke_1])
+                        p_1_vec.append(self.words2idx[toke_1])
                     except KeyError:
-                        x, loaded_embeddings = self.ignore_OOV(toke_1, ignore, emb_size, loaded_embeddings, self.words)
+                        x = self.words2idx['UNK']
                         p_1_vec.append(x)
 
                 for toke_2 in p_2_tok:
                     toke_2 = toke_2.lower()
                     try:
-                        p_2_vec.append(self.words[toke_2.lower()])
+                        p_2_vec.append(self.words2idx[toke_2])
                     except KeyError:
-                        x, loaded_embeddings = self.ignore_OOV(toke_2, ignore, emb_size, loaded_embeddings, self.words)
+                        x = self.words2idx['UNK']
                         p_2_vec.append(x)
 
                 sentence2vec.append([p_1, p_1_vec, p_2, p_2_vec, label])
 
             except IndexError:
                 continue
-        return sentence2vec, loaded_embeddings
+        return sentence2vec
 
     def datatosentence(self, data_set):
             '''add UNK to the embedding'''
@@ -154,14 +141,11 @@ class pretrain():
             for pair in data_set:
                 try:
                     p_1, p_2, label = pair[1], pair[2], pair[0]
-                    # p_1_tok, p_2_tok = nltk.word_tokenize(p_1),nltk.word_tokenize(p_2)
-                    # p_1_vec = []
-                    # p_2_vec = []
                     sentence2vec.append([p_1, p_2, label])
                 except IndexError:
                     continue
             return sentence2vec
-    
+
     def batch_iter(self, matrix, batch_size, use_pretrain, reuse=True):
 
         '''
@@ -190,7 +174,7 @@ class pretrain():
                 label = []
                 p1_length_list = []
                 p2_length_list = []
-                
+
                 if start > dataset_size - batch_size:
 
                     if reuse is True:
@@ -223,23 +207,17 @@ class pretrain():
                 p2_pad_list = []
 
                 for i, k in enumerate(batch):
-#                     p1_padded_vec = np.pad(np.array(k[1]), 
-#                                             pad_width=(((0,max_length_p1-len(k[1]))),(0,0)), 
-#                                             mode="constant", constant_values=0)
                     ###change the padding###
                     p1_padded_vec = np.pad(np.array(k[1]),
-                                           pad_width=((0, max_length_p1 - len(k[1]))), 
+                                           pad_width=((0, max_length_p1 - len(k[1]))),
                                            mode="constant", constant_values=0)
                     # print('p1_padded_vec', p1_padded_vec)
 
                     p1_pad_list.append(p1_padded_vec)
 
-#                     p2_padded_vec = np.pad(np.array(k[3]),
-#                                             pad_width=(((0,max_length_p2-len(k[3]))),(0,0)),
-#                                             mode="constant", constant_values=0)
                     ###change the padding###
                     p2_padded_vec = np.pad(np.array(k[3]),
-                                           pad_width=((0, max_length_p2 - len(k[3]))), 
+                                           pad_width=((0, max_length_p2 - len(k[3]))),
                                            mode="constant", constant_values=0)
 
                     p2_pad_list.append(p2_padded_vec)
