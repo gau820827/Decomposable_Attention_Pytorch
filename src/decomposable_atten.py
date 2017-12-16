@@ -304,6 +304,7 @@ def train_iter(model, data_iter, iter_time):
     optimizer = optim.Adagrad(model.parameters(), lr=LR)
     lossf = nn.CrossEntropyLoss()
 
+    print('Start Training!')
     for iteration in range(1, iter_time + 1):
         # catch the data
         p1_vec, p2_vec, p1_str, p2_str, label = next(data_iter)

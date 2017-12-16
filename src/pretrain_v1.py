@@ -25,13 +25,9 @@ class pretrain():
     Document file is located(path) in the same file, could be modified if you need to do so
     '''
 
-    def __init__(self, emb_size, pretrain_filename, document_filename, ignore, batch_size, use_pretrain):
-        ###change this route after test
-        glove_home = '../pretrainvec/'
-        sst_home = '../data/'
-        # glove_home = './pretrainvec/'
-        # sst_home = document_filename
-
+    def __init__(self, emb_size, pretrain_filename, document_filename,
+                 ignore, batch_size, use_pretrain):
+        sst_home = document_filename
 
         self.emb_size = emb_size
         self.pretrain_filename = pretrain_filename
@@ -42,8 +38,8 @@ class pretrain():
         ''' read pretrain glove file '''
         ''' return train_set, validation_set, test_set'''
 
-        if(use_pretrain is True):
-            with open(glove_home + self.pretrain_filename) as f:
+        if use_pretrain is True:
+            with open(self.pretrain_filename) as f:
 
                 load = f.readlines()
                 words_to_load = len(load)
@@ -53,30 +49,22 @@ class pretrain():
                 self.idx2words = {}
                 for i, line in enumerate(load):
                     s = line.split()
-                    if len(s[1:]) > 300:
-                        print('{}: {}'.format(i, line))
 
                     self.loaded_embeddings[i, :] = np.asarray(s[-emb_size:])
 
                     word = ' '.join(s[:-emb_size])
-                    if len(s[1:]) > 300:
-                        print(word)
+
                     self.words[word] = i + 1
                     self.idx2words[i + 1] = word
-
 
                 self.words['UNK'] = len(self.words) + 1
                 self.idx2words[len(self.words) + 1] = 'UNK'
 
                 self.loaded_embeddings = np.vstack((self.loaded_embeddings, (2 * np.random.random_sample((1, self.emb_size)) - 1)))
 
-        ### change this route after test
-        self.train_set = self.load_sst_data(sst_home + 'train.tsv')
+        self.train_set = self.load_sst_data(sst_home + 'small_train.tsv')
         self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
         self.test_set = self.load_sst_data(sst_home + 'test.tsv')
-        # self.train_set = self.load_sst_data(sst_home)
-        # self.validation_set = self.load_sst_data(sst_home)
-        # self.test_set = self.load_sst_data(sst_home)
 
         # Only train return loaded_embeddings; the others would not catch the loaded_embeddings
         if (use_pretrain is True):
@@ -116,7 +104,7 @@ class pretrain():
         '''if ignore is True, each OOV assign the same vector'''
         if ignore is False:
             ###len(words) should plus 1, since leaving 0 for padding###
-            words[toke] = len(words)+1
+            words[toke] = len(words) + 1
             loaded_embeddings = np.concatenate((loaded_embeddings, (2 * np.random.random_sample((1, emb_size)) - 1)), axis=0)
         else:
             toke = 'UNK'
@@ -211,7 +199,6 @@ class pretrain():
                     else:
                         return
 
-
                 batch_indices = order[start:start + batch_size]
                 batch = [matrix[index] for index in batch_indices]
 
@@ -223,10 +210,8 @@ class pretrain():
                     p1.append(k[0])
                     p1_2vec.append(k[1])
 
-
                     p2.append(k[2])
                     p2_2vec.append(k[3])
-
 
                     label.append(int(k[4]))
 
@@ -237,23 +222,23 @@ class pretrain():
                 p1_pad_list = []
                 p2_pad_list = []
 
-                for i,k in enumerate(batch):
+                for i, k in enumerate(batch):
 #                     p1_padded_vec = np.pad(np.array(k[1]), 
 #                                             pad_width=(((0,max_length_p1-len(k[1]))),(0,0)), 
 #                                             mode="constant", constant_values=0)
                     ###change the padding###
-                    p1_padded_vec = np.pad(np.array(k[1]), 
+                    p1_padded_vec = np.pad(np.array(k[1]),
                                            pad_width=((0, max_length_p1 - len(k[1]))), 
                                            mode="constant", constant_values=0)
                     # print('p1_padded_vec', p1_padded_vec)
 
                     p1_pad_list.append(p1_padded_vec)
 
-#                     p2_padded_vec = np.pad(np.array(k[3]), 
-#                                             pad_width=(((0,max_length_p2-len(k[3]))),(0,0)), 
+#                     p2_padded_vec = np.pad(np.array(k[3]),
+#                                             pad_width=(((0,max_length_p2-len(k[3]))),(0,0)),
 #                                             mode="constant", constant_values=0)
                     ###change the padding###
-                    p2_padded_vec = np.pad(np.array(k[3]), 
+                    p2_padded_vec = np.pad(np.array(k[3]),
                                            pad_width=((0, max_length_p2 - len(k[3]))), 
                                            mode="constant", constant_values=0)
 
@@ -276,7 +261,6 @@ class pretrain():
                         random.shuffle(order)
                     else:
                         return
-                    
 
                 batch_indices = order[start:start + batch_size]
                 batch = [matrix[index] for index in batch_indices]
@@ -285,9 +269,8 @@ class pretrain():
                     p2.append(k[1])
                     label.append(k[2])
 
-                    
                 yield [[], [], p1, p2, label]
-                
+
     def eval_model_all(self, data_iter, model):
         """
         1. input variable_1, variable_2, model
