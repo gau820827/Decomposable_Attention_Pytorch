@@ -7,7 +7,9 @@ import torch.nn.functional as F
 import numpy as np
 
 from charNgram import NgramChar
-from pretrain import pretrain
+from pretrain_v1 import pretrain
+
+use_cuda = torch.cuda.is_available()
 
 
 class DecomposableAttention(nn.Module):
@@ -27,6 +29,7 @@ class DecomposableAttention(nn.Module):
         self.embedding_model = mode
 
         self.embeddings = nn.Embedding(vocab_size, embedding_dim)
+        # self.projection = nn.Linear(embedding_dim, embedding_dim)
         self.attend = _Attend(embedding_dim, hidden_dim)
         self.compare = _Compare(embedding_dim, hidden_dim)
         self.aggregate = _Aggregate(embedding_dim, hidden_dim, output_dim)
@@ -72,6 +75,9 @@ class DecomposableAttention(nn.Module):
             x1 = embed_x1
             x2 = embed_x2
 
+        # x1 = self.projection(x1)
+        # x2 = self.projection(x2)
+
         alpha, beta = self.attend(x1, x2)
         v1, v2 = self.compare(alpha, beta, x1, x2)
         out = self.aggregate(v1, v2)
@@ -94,9 +100,11 @@ class _Attend(nn.Module):
         beta = [0 for i in range(x1.size()[1])]
         for i in range(x1.size()[1]):
             n = torch.sum(e[:, i, :], dim=1)
+
             n = n.view(-1, 1)
 
             seq = [torch.div(x, n[idx, :]).view(1, -1) for idx, x in enumerate(e[:, i, :])]
+
             val = torch.cat(seq, dim=0).view((x1.size()[0], -1, 1))
             val = torch.mul(val, x2)
             val = torch.sum(val, dim=1)
@@ -146,6 +154,7 @@ class _Aggregate(nn.Module):
     def forward(self, v1, v2):
         v1 = torch.sum(v1, dim=1)
         v2 = torch.sum(v2, dim=1)
+
         out = self.h(torch.cat((v1, v2), dim=1))
         return out
 
@@ -157,15 +166,25 @@ class _F(nn.Module):
         self.hidden1 = nn.Linear(input_dim, hidden_dim)
         self.hidden2 = nn.Linear(hidden_dim, hidden_dim)
         self.hidden3 = nn.Linear(hidden_dim, output_dim)
+        self.init_weights()
 
     def forward(self, x):
         out = self.hidden1(x)
         out = F.relu(out)
+        out = F.dropout(out, p=0.2)
         out = self.hidden2(out)
         out = F.relu(out)
+        out = F.dropout(out, p=0.2)
         out = self.hidden3(out)
-        out = F.relu(out)
         return out
+
+    def init_weights(self):
+        initrange = 0.1
+        lin_layers = [self.hidden1, self.hidden2, self.hidden3]
+
+        for layer in lin_layers:
+            layer.weight.data.uniform_(-initrange, initrange)
+            layer.bias.data.fill_(0)
 
 
 def mini_train(pair_a, pair_b, target, model):
@@ -251,26 +270,59 @@ def charngram_test():
     mini_train(a, b, target, model)
 
 
-## TODO: 1. Complete the training loop.
+## TODO: 1. Complete the evaluation part.
 ##       2. Run the training script.
+
+def evaluate(model, data_iter):
+    """The helper function for evaluation."""
+    model.eval()
+    correct = 0
+    total = 0
+    for i in range(len(data_iter)):
+        vectors, labels = next(data_iter[i])
+        vectors = Variable(torch.stack(vectors).squeeze())
+        labels = torch.stack(labels).squeeze()
+        output = model(vectors)
+        _, predicted = torch.max(output.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum()
+    return correct / float(total)
+
+
 def train_iter(model, data_iter, iter_time):
     """Training loop."""
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adagrad(model.parameters(), lr=0.01)
     lossf = nn.CrossEntropyLoss()
 
+    step = 0
     for i in range(iter_time):
         # catch the data
         p1_vec, p2_vec, p1_str, p2_str, label = next(data_iter)
         p1_vec = Variable(p1_vec)
         p2_vec = Variable(p2_vec)
-
         label = Variable(label)
+
+        if use_cuda:
+            p1_vec = p1_vec.cuda()
+            p2_vec = p2_vec.cuda()
+            label = label.cuda()
+
         model.zero_grad()
         out = model(p1_vec, p2_vec)
 
         loss = lossf(out, label)
+
         loss.backward()
         optimizer.step()
+
+        if step % 10 == 0:
+            print("Step %i; Loss %f; "
+                  % (step, loss.data[0]))
+
+        # if step % 100 == 0:
+        #     print("Step %i; Loss %f; Train acc: %f; Dev acc %f"
+        #           % (step, loss.data[0], evaluate(model, train_eval_iter), evaluate(model, dev_iter)))
+        step += 1
 
 
 def train(embedding_dim, hidden_dim, output_dim, batch_size,
@@ -285,23 +337,18 @@ def train(embedding_dim, hidden_dim, output_dim, batch_size,
     """
     model = DecomposableAttention(embedding_dim, hidden_dim, output_dim)
 
-    if usepretrain:
-        pt = pretrain(pretrain_emb_size, pretrain_filename, document_filename,
-                      ignore, batch_size)
-        data_iter = pt.batch_iter(pt.matrix, pt.batch_size)
-        test = next(data_iter)
+    pt = pretrain(pretrain_emb_size, pretrain_filename, document_filename,
+                  ignore, batch_size, usepretrain)
+    data_iter = pt.batch_iter(pt.matrix_train, pt.batch_size, pt.use_pretrain)
 
     print("Data loaded......")
 
-    p1_vec, p2_vec, p1_str, p2_str, label = test
-
-    p1_vec = Variable(p1_vec)
-    p2_vec = Variable(p2_vec)
-    label = Variable(label)
-
     model.double()
-    # mini_train(p1_vec, p2_vec, label, model)
-    train_iter(model, data_iter, 100)
+
+    if use_cuda:
+        model.cuda()
+
+    train_iter(model, data_iter, 10000)
 
 
 if __name__ == '__main__':
@@ -309,17 +356,17 @@ if __name__ == '__main__':
     # Parameters for loading pre-train word
     usepretrain = True
     pretrain_emb_size = 50
-    pretrain_filename = './pretrainvec/glove/glove_small.txt'
-    document_filename = './data/small_quora.tsv'
+    pretrain_filename = '../pretrainvec/glove/glove_small.txt'
+    document_filename = '../data/'
     ignore = True
 
     # Parameter for core model
     embedding_dim = 50
-    hidden_dim = 200
+    hidden_dim = 50
     output_dim = 2
 
     # Parameter for data batching
-    batch_size = 32
+    batch_size = 1
 
     test = False
 
