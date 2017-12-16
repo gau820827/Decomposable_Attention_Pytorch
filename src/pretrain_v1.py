@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
+
 class pretrain():
 #     pretrain(emb_size, pretrain_filename_path, document_filename, ignore = True, batch_size = 32):
     '''
@@ -26,8 +27,8 @@ class pretrain():
 
     def __init__(self, emb_size, pretrain_filename, document_filename, ignore, batch_size, use_pretrain):
         ###change this route after test
-        glove_home = './pretrainvec/'
-        sst_home = './data/'
+        glove_home = '../pretrainvec/'
+        sst_home = '../data/'
         # glove_home = './pretrainvec/'
         # sst_home = document_filename
 
@@ -42,9 +43,7 @@ class pretrain():
         ''' return train_set, validation_set, test_set'''
 
         if(use_pretrain is True):
-            ###change this route after test
             with open(glove_home + self.pretrain_filename) as f:
-            # with open(self.pretrain_filename) as f:
 
                 load = f.readlines()
                 words_to_load = len(load)
@@ -52,35 +51,32 @@ class pretrain():
                 self.loaded_embeddings = np.zeros((words_to_load, self.emb_size))
                 self.words = {}
                 self.idx2words = {}
-                self.ordered_words = []
                 for i, line in enumerate(load):
-                    if i >= words_to_load:
-                        break
                     s = line.split()
-                    self.loaded_embeddings[i, :] = np.asarray(s[1:])
-                    ###change###
-                    self.words[s[0]] = i+1
-                    self.idx2words[i+1] = s[0]
-                    ###change###
-                    self.ordered_words.append(s[0])
-                ###change###
-                self.words['UNK'] = len(self.words)+1
-                self.idx2words[len(self.words)+1] = 'UNK'
-                ###change###
+                    if len(s[1:]) > 300:
+                        print('{}: {}'.format(i, line))
+
+                    self.loaded_embeddings[i, :] = np.asarray(s[-emb_size:])
+
+                    word = ' '.join(s[:-emb_size])
+                    if len(s[1:]) > 300:
+                        print(word)
+                    self.words[word] = i + 1
+                    self.idx2words[i + 1] = word
+
+
+                self.words['UNK'] = len(self.words) + 1
+                self.idx2words[len(self.words) + 1] = 'UNK'
+
                 self.loaded_embeddings = np.vstack((self.loaded_embeddings, (2 * np.random.random_sample((1, self.emb_size)) - 1)))
 
-        ###change this route after test
+        ### change this route after test
         self.train_set = self.load_sst_data(sst_home + 'train.tsv')
         self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
         self.test_set = self.load_sst_data(sst_home + 'test.tsv')
         # self.train_set = self.load_sst_data(sst_home)
         # self.validation_set = self.load_sst_data(sst_home)
         # self.test_set = self.load_sst_data(sst_home)
-
-
-        self.train_set = self.load_sst_data(sst_home + 'small_train.tsv')
-        # self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
-        # self.test_set = self.load_sst_data(sst_home + 'test.tsv')
 
         # Only train return loaded_embeddings; the others would not catch the loaded_embeddings
         if (use_pretrain is True):
@@ -104,14 +100,10 @@ class pretrain():
                 text_1 = re.sub(r'\s*(\(\d)|(\))\s*', '', line)
                 text_1 = re.split(r'\t+', text_1)
 
-                example['text'] = text_1[0:-1]
-                data.append(example)
-                ###should open this part after testing###
-                # reverse_example = [text_1[0], text_1[2], text_1[1]]
-                # example['text'] = reverse_example
-                # data.append(example)
-                
+                data.append(text_1[:3])
 
+                # Reverse the question pair
+                data.append([text_1[0], text_1[2], text_1[1]])
         return data
 
     def train_test_sp(self, data_set):
@@ -159,9 +151,7 @@ class pretrain():
                         x, loaded_embeddings = self.ignore_OOV(toke_2, ignore, emb_size, loaded_embeddings, self.words)
                         p_2_vec.append(x)
 
-
                 sentence2vec.append([p_1, p_1_vec, p_2, p_2_vec, label])
-
 
             except IndexError:
                 continue
@@ -174,18 +164,17 @@ class pretrain():
             sentence2vec = []
             print('I am here')
             for pair in data_set:
-
-                try:#
-                    p_1, p_2, label = pair['text'][1], pair['text'][2],pair['text'][0]
+                try:
+                    p_1, p_2, label = pair[1], pair[2], pair[0]
                     # p_1_tok, p_2_tok = nltk.word_tokenize(p_1),nltk.word_tokenize(p_2)
                     # p_1_vec = []
                     # p_2_vec = []
-                    sentence2vec.append([p_1,p_2,label])
+                    sentence2vec.append([p_1, p_2, label])
                 except IndexError:
                     continue
             return sentence2vec
     
-    def batch_iter(self, matrix, batch_size, use_pretrain, reuse = True):
+    def batch_iter(self, matrix, batch_size, use_pretrain, reuse=True):
 
         '''
         return a batch: list w and all have been already converted to tensor

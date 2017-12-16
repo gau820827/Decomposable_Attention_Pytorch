@@ -9,6 +9,12 @@ import numpy as np
 from charNgram import NgramChar
 from pretrain_v1 import pretrain
 
+from settings import PRETRAIN_FILE, DOCUMENT_FILE
+from settings import LR, ITER_TIME, BATCH_SIZE
+from settings import GET_LOSS, SAVE_MODEL, OUTPUT_FILE
+from settings import EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_DIM, DROPOUT
+
+
 use_cuda = torch.cuda.is_available()
 
 
@@ -22,13 +28,16 @@ class DecomposableAttention(nn.Module):
     """
 
     def __init__(self, embedding_dim, hidden_dim, output_dim, 
-                 mode='glove', vocab_size=0):
+                 loaded_embeddings, mode='glove'):
         super(DecomposableAttention, self).__init__()
 
         # Choose word_embedding model
         self.embedding_model = mode
 
-        self.embeddings = nn.Embedding(vocab_size, embedding_dim)
+        vocab_size = loaded_embeddings.shape[0]
+        self.embeddings = nn.Embedding(vocab_size + 1, embedding_dim, padding_idx = 0)
+        self.embeddings.weight = nn.Parameter(torch.from_numpy(loaded_embeddings).float())
+
         # self.projection = nn.Linear(embedding_dim, embedding_dim)
         self.attend = _Attend(embedding_dim, hidden_dim)
         self.compare = _Compare(embedding_dim, hidden_dim)
@@ -78,6 +87,8 @@ class DecomposableAttention(nn.Module):
         # x1 = self.projection(x1)
         # x2 = self.projection(x2)
 
+        x1 = self.embeddings(x1)
+        x2 = self.embeddings(x2)
         alpha, beta = self.attend(x1, x2)
         v1, v2 = self.compare(alpha, beta, x1, x2)
         out = self.aggregate(v1, v2)
@@ -171,10 +182,10 @@ class _F(nn.Module):
     def forward(self, x):
         out = self.hidden1(x)
         out = F.relu(out)
-        out = F.dropout(out, p=0.2)
+        out = F.dropout(out, p=DROPOUT)
         out = self.hidden2(out)
         out = F.relu(out)
-        out = F.dropout(out, p=0.2)
+        out = F.dropout(out, p=DROPOUT)
         out = self.hidden3(out)
         return out
 
@@ -270,32 +281,30 @@ def charngram_test():
     mini_train(a, b, target, model)
 
 
-## TODO: 1. Complete the evaluation part.
-##       2. Run the training script.
+## TODO: Evaluation Loop
 
-def evaluate(model, data_iter):
-    """The helper function for evaluation."""
-    model.eval()
-    correct = 0
-    total = 0
-    for i in range(len(data_iter)):
-        vectors, labels = next(data_iter[i])
-        vectors = Variable(torch.stack(vectors).squeeze())
-        labels = torch.stack(labels).squeeze()
-        output = model(vectors)
-        _, predicted = torch.max(output.data, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum()
-    return correct / float(total)
+# def evaluate(model, data_iter):
+#     """The helper function for evaluation."""
+#     model.eval()
+#     correct = 0
+#     total = 0
+#     for i in range(len(data_iter)):
+#         vectors, labels = next(data_iter[i])
+#         vectors = Variable(torch.stack(vectors).squeeze())
+#         labels = torch.stack(labels).squeeze()
+#         output = model(vectors)
+#         _, predicted = torch.max(output.data, 1)
+#         total += labels.size(0)
+#         correct += (predicted == labels).sum()
+#     return correct / float(total)
 
 
 def train_iter(model, data_iter, iter_time):
     """Training loop."""
-    optimizer = optim.Adagrad(model.parameters(), lr=0.01)
+    optimizer = optim.Adagrad(model.parameters(), lr=LR)
     lossf = nn.CrossEntropyLoss()
 
-    step = 0
-    for i in range(iter_time):
+    for iteration in range(1, iter_time + 1):
         # catch the data
         p1_vec, p2_vec, p1_str, p2_str, label = next(data_iter)
         p1_vec = Variable(p1_vec)
@@ -315,19 +324,21 @@ def train_iter(model, data_iter, iter_time):
         loss.backward()
         optimizer.step()
 
-        if step % 10 == 0:
-            print("Step %i; Loss %f; "
-                  % (step, loss.data[0]))
+        if iteration % GET_LOSS == 0:
+            print("Iter %i : Loss %f" % (iteration, loss.data[0]))
+
+        if iteration % SAVE_MODEL == 0:
+            torch.save(model.state_dict(), "{}_{}".format(OUTPUT_FILE, iteration))
+            print("Save the model at iter {}".format(iteration))
 
         # if step % 100 == 0:
         #     print("Step %i; Loss %f; Train acc: %f; Dev acc %f"
         #           % (step, loss.data[0], evaluate(model, train_eval_iter), evaluate(model, dev_iter)))
-        step += 1
 
 
 def train(embedding_dim, hidden_dim, output_dim, batch_size,
           usepretrain, pretrain_emb_size, pretrain_filename,
-          document_filename, ignore):
+          document_filename, ignore, iter_time):
     """The core part of training the model.
 
     First, we will initialize the model based on given parameters.
@@ -335,39 +346,51 @@ def train(embedding_dim, hidden_dim, output_dim, batch_size,
     Third, we load the dataset.
 
     """
-    model = DecomposableAttention(embedding_dim, hidden_dim, output_dim)
-
-    pt = pretrain(pretrain_emb_size, pretrain_filename, document_filename,
-                  ignore, batch_size, usepretrain)
-    data_iter = pt.batch_iter(pt.matrix_train, pt.batch_size, pt.use_pretrain)
+    if usepretrain:
+        pt = pretrain(pretrain_emb_size, pretrain_filename, document_filename,
+                      ignore, batch_size, usepretrain)
+        data_iter = pt.batch_iter(pt.matrix_train, pt.batch_size, usepretrain)
 
     print("Data loaded......")
+
+    model = DecomposableAttention(embedding_dim, hidden_dim, output_dim, pt.loaded_embeddings)
 
     model.double()
 
     if use_cuda:
         model.cuda()
 
-    train_iter(model, data_iter, 10000)
+    train_iter(model, data_iter, iter_time)
+
+
+def showconfig():
+    """Display the configuration."""
+    print("EMBEDDING_SIZE = {}\nLR = {}\nITER_TIME = {}\nBATCH_SIZE = {}".format(
+        EMBEDDING_SIZE, LR, ITER_TIME, BATCH_SIZE))
+    print("DROPOUT_RATE = {}".format(DROPOUT))
+    print("USE_PRETRAIN = {}\nOUTPUT_FILE = {}".format(PRETRAIN_FILE, OUTPUT_FILE))
 
 
 if __name__ == '__main__':
 
     # Parameters for loading pre-train word
-    usepretrain = True
-    pretrain_emb_size = 50
-    pretrain_filename = '../pretrainvec/glove/glove_small.txt'
-    document_filename = '../data/'
+    pretrain_filename = PRETRAIN_FILE
+    document_filename = DOCUMENT_FILE
     ignore = True
 
     # Parameter for core model
-    embedding_dim = 50
-    hidden_dim = 50
-    output_dim = 2
+    embedding_dim = EMBEDDING_SIZE
+    hidden_dim = HIDDEN_SIZE
+    output_dim = OUTPUT_DIM
 
     # Parameter for data batching
-    batch_size = 1
+    iter_time = ITER_TIME
+    batch_size = BATCH_SIZE
 
+    showconfig()
+
+    usepretrain = False if pretrain_filename is None else True
+    pretrain_emb_size = embedding_dim
     test = False
 
     # Function Test
@@ -377,4 +400,5 @@ if __name__ == '__main__':
 
     # Main train loop
     train(embedding_dim, hidden_dim, output_dim, batch_size, usepretrain,
-          pretrain_emb_size, pretrain_filename, document_filename, ignore)
+          pretrain_emb_size, pretrain_filename, document_filename, ignore,
+          iter_time)
