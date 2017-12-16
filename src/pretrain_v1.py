@@ -1,11 +1,5 @@
-
-# coding: utf-8
-
-# under the working environemtn
-# Command line to conver jupyter notebook to py: $ jupyter nbconvert --to script pretrain_glove.ipynb
-
-# In[104]:
-
+<<<<<<< HEAD
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
 import pprint
 import numpy as np
 from operator import itemgetter
@@ -16,7 +10,10 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import torch
 
-
+<<<<<<< HEAD
+import torch.nn as nn
+from torch.autograd import Variable
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
 class pretrain():
 #     pretrain(emb_size, pretrain_filename_path, document_filename, ignore = True, batch_size = 32):
     '''
@@ -29,11 +26,15 @@ class pretrain():
     '''
     Document file is located(path) in the same file, could be modified if you need to do so
     '''
-    def __init__(self, emb_size, pretrain_filename, document_filename, 
-                 ignore, batch_size, use_pretrain):
-
-        sst_home = document_filename
-
+<<<<<<< HEAD
+    def __init__(self, emb_size, pretrain_filename, document_filename, ignore, batch_size, use_pretrain):
+        ###change this route after test
+        glove_home = './pretrainvec/'
+        sst_home = './data/'
+        # glove_home = './pretrainvec/'
+        # sst_home = document_filename
+        
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
         self.emb_size = emb_size
         self.pretrain_filename = pretrain_filename
         self.ignore = ignore
@@ -42,9 +43,12 @@ class pretrain():
 
         ''' read pretrain glove file '''
         ''' return train_set, validation_set, test_set'''
-
-        if (use_pretrain is True):
-            with open(self.pretrain_filename) as f:
+<<<<<<< HEAD        
+        if(use_pretrain is True):
+            ###change this route after test
+            with open(glove_home + self.pretrain_filename) as f:
+            # with open(self.pretrain_filename) as f:
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
                 load = f.readlines()
                 words_to_load = len(load)
 
@@ -57,11 +61,25 @@ class pretrain():
                         break
                     s = line.split()
                     self.loaded_embeddings[i, :] = np.asarray(s[1:])
-                    self.words[s[0]] = i
-                    self.idx2words[i] = s[0]
+                    ###change###
+                    self.words[s[0]] = i+1
+                    self.idx2words[i+1] = s[0]
+                    ###change###
                     self.ordered_words.append(s[0])
-                self.words['UNK'] = len(self.words)
+                ###change###
+                self.words['UNK'] = len(self.words)+1
+                self.idx2words[len(self.words)+1] = 'UNK'
+                ###change###
                 self.loaded_embeddings = np.vstack((self.loaded_embeddings, (2 * np.random.random_sample((1, self.emb_size)) - 1)))
+<<<<<<< HEAD
+        ###change this route after test
+        self.train_set = self.load_sst_data(sst_home + 'train.tsv')
+        self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
+        self.test_set = self.load_sst_data(sst_home + 'test.tsv')
+        # self.train_set = self.load_sst_data(sst_home)
+        # self.validation_set = self.load_sst_data(sst_home)
+        # self.test_set = self.load_sst_data(sst_home)
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
 
         self.train_set = self.load_sst_data(sst_home + 'small_train.tsv')
         # self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
@@ -88,12 +106,15 @@ class pretrain():
             for i, line in enumerate(text):
                 text_1 = re.sub(r'\s*(\(\d)|(\))\s*', '', line)
                 text_1 = re.split(r'\t+', text_1)
-
-                data.append(text_1[0:-1])
-
-                reverse_example = [text_1[0], text_1[2], text_1[1]]
-                data.append(reverse_example)
-
+<<<<<<< HEAD
+                example['text'] = text_1[0:-1]
+                data.append(example)
+                ###should open this part after testing###
+                # reverse_example = [text_1[0], text_1[2], text_1[1]]
+                # example['text'] = reverse_example
+                # data.append(example)
+                
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
         return data
 
     def train_test_sp(self, data_set):
@@ -105,7 +126,8 @@ class pretrain():
         '''if ignore is Flase, each OOV assign different vector'''
         '''if ignore is True, each OOV assign the same vector'''
         if ignore is False:
-            words[toke] = len(words)
+            ###len(words) should plus 1, since leaving 0 for padding###
+            words[toke] = len(words)+1
             loaded_embeddings = np.concatenate((loaded_embeddings, (2 * np.random.random_sample((1, emb_size)) - 1)), axis=0)
         else:
             toke = 'UNK'
@@ -126,7 +148,8 @@ class pretrain():
                 for toke_1 in p_1_tok:
                     toke_1 = toke_1.lower()
                     try:
-                        p_1_vec.append(loaded_embeddings[self.words[toke_1]])
+                        ### return index instead returning vector###
+                        p_1_vec.append(self.words[toke_1])
                     except KeyError:
                         x, loaded_embeddings = self.ignore_OOV(toke_1, ignore, emb_size, loaded_embeddings, self.words)
                         p_1_vec.append(x)
@@ -134,13 +157,16 @@ class pretrain():
                 for toke_2 in p_2_tok:
                     toke_2 = toke_2.lower()
                     try:
-                        p_2_vec.append(loaded_embeddings[self.words[toke_2.lower()]])
+                        p_2_vec.append(self.words[toke_2.lower()])
                     except KeyError:
                         x, loaded_embeddings = self.ignore_OOV(toke_2, ignore, emb_size, loaded_embeddings, self.words)
                         p_2_vec.append(x)
+<<<<<<< HEAD
 
                 sentence2vec.append([p_1, p_1_vec, p_2, p_2_vec, label])
 
+            
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
             except IndexError:
                 continue
         return sentence2vec, loaded_embeddings
@@ -152,15 +178,19 @@ class pretrain():
             sentence2vec = []
             print('I am here')
             for pair in data_set:
-                try:
-                    p_1, p_2, label = pair['text'][1], pair['text'][2], pair['text'][0]
-                    p_1_tok, p_2_tok = nltk.word_tokenize(p_1), nltk.word_tokenize(p_2)
-                    sentence2vec.append([p_1, p_2, label])
+<<<<<<< HEAD
+                try:#
+                    p_1, p_2, label = pair['text'][1], pair['text'][2],pair['text'][0]
+                    # p_1_tok, p_2_tok = nltk.word_tokenize(p_1),nltk.word_tokenize(p_2)
+                    # p_1_vec = []
+                    # p_2_vec = []
+                    sentence2vec.append([p_1,p_2,label])
                 except IndexError:
                     continue
             return sentence2vec
-
-    def batch_iter(self, matrix, batch_size, use_pretrain):
+    
+    def batch_iter(self, matrix, batch_size, use_pretrain, reuse = True):
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
         '''
         return a batch: list w and all have been already converted to tensor
         default batch size 32
@@ -170,6 +200,7 @@ class pretrain():
         w[2]: p1_string
         w[3]: p2_string
         w[4]: label
+        reuse: True or False, if False, the bacth would runout and throw 'StopIteration'
         '''
         start = -1 * batch_size
         dataset_size = len(matrix)
@@ -186,10 +217,15 @@ class pretrain():
                 label = []
                 p1_length_list = []
                 p2_length_list = []
-
+                
                 if start > dataset_size - batch_size:
-                    start = 0
-                    random.shuffle(order)
+<<<<<<< HEAD
+                    if reuse is True:
+                        start = 0
+                        random.shuffle(order)
+                    else:
+                        return
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
 
                 batch_indices = order[start:start + batch_size]
                 batch = [matrix[index] for index in batch_indices]
@@ -202,8 +238,10 @@ class pretrain():
                     p1.append(k[0])
                     p1_2vec.append(k[1])
 
+
                     p2.append(k[2])
                     p2_2vec.append(k[3])
+
 
                     label.append(int(k[4]))
 
@@ -213,16 +251,27 @@ class pretrain():
                 # print('max_length_p2', max_length_p2)
                 p1_pad_list = []
                 p2_pad_list = []
-                for i, k in enumerate(batch):
-                    p1_padded_vec = np.pad(np.array(k[1]),
-                                           pad_width=(((0, max_length_p1 - len(k[1]))),(0,0)), 
+<<<<<<< HEAD
+                for i,k in enumerate(batch):
+#                     p1_padded_vec = np.pad(np.array(k[1]), 
+#                                             pad_width=(((0,max_length_p1-len(k[1]))),(0,0)), 
+#                                             mode="constant", constant_values=0)
+                    ###change the padding###
+                    p1_padded_vec = np.pad(np.array(k[1]), 
+                                           pad_width=((0, max_length_p1 - len(k[1]))), 
                                            mode="constant", constant_values=0)
+                    # print('p1_padded_vec', p1_padded_vec)
 
                     p1_pad_list.append(p1_padded_vec)
 
-                    p2_padded_vec = np.pad(np.array(k[3]),
-                                           pad_width=(((0, max_length_p2 - len(k[3]))), (0,0)), 
+#                     p2_padded_vec = np.pad(np.array(k[3]), 
+#                                             pad_width=(((0,max_length_p2-len(k[3]))),(0,0)), 
+#                                             mode="constant", constant_values=0)
+                    ###change the padding###
+                    p2_padded_vec = np.pad(np.array(k[3]), 
+                                           pad_width=((0, max_length_p2 - len(k[3]))), 
                                            mode="constant", constant_values=0)
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
                     p2_pad_list.append(p2_padded_vec)
 
                 yield [torch.from_numpy(np.asarray(p1_pad_list)),
@@ -236,24 +285,115 @@ class pretrain():
                 label = []
 
                 if start > dataset_size - batch_size:
-                    start = 0
-                    random.shuffle(order)
-
+<<<<<<< HEAD
+                    if reuse is True:
+                        start = 0
+                        random.shuffle(order)
+                    else:
+                        return
+                    
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
                 batch_indices = order[start:start + batch_size]
                 batch = [matrix[index] for index in batch_indices]
                 for i, k in enumerate(batch):
                     p1.append(k[0])
                     p2.append(k[1])
                     label.append(k[2])
+<<<<<<< HEAD
+                    
+                yield [[], [], p1, p2, label]
+                
+    def eval_model_all(self, data_iter, model):
+        """
+        1. input variable_1, variable_2, model
+        2. put (v1 and v2) into model 
+        3. return the accuracy: this is for all batch
 
-                yield [p1, p2, label]
+        """
+        correct = 0
+        total = 0
+
+        model.eval()
+
+        while True:
+            try:
+                p1_vec, p2_vec, p1_str, p2_str, label  = next(data_iter)
+
+                p1_vec = Variable(p1_vec)
+                p2_vec = Variable(p2_vec)
+
+                outputs = model(p1_vec, p2_vec)
+                predicted = (outputs.data > 0.5).long().view(-1)
+                total += label.size(0)
+                # print('label',label)
+                # print(type(label))
+                print('outputs.data',outputs.data)
+                print(type(outputs.data))
+                print('predicted',predicted)
+                print(type(predicted))
+                print('total',total)
+                print(type(total))
+                correct += (predicted == label).sum()
+
+            except StopIteration:
+                model.train()
+                break
+            model.train()
+
+        return (100 * correct / total)
+        
+
+
+# In[6]:
+
+# def eval_model_all(data_iter, model):
+#     """
+#     1. input variable_1, variable_2, model
+#     2. put (v1 and v2) into model
+#     3. return the accuracy: this is for all batch
+    
+#     """
+#     correct = 0
+#     total = 0
+    
+#     model.eval()
+    
+#     while True:
+#         try:
+#             p1_vec, p2_vec, p1_str, p2_str, label  = next(data_iter)
+            
+#             p1_vec = Variable(p1_vec)
+#             p2_vec = Variable(p2_vec)
+            
+#             outputs = model(p1_vec, p2_vec)
+#             predicted = (outputs.data > 0.5).long().view(-1)
+#             total += labels.size(0)
+#             correct += (predicted == labels).sum()
+            
+#         except StopIteration:
+#             model.train()
+#             break
+#         model.train()
+        
+#     return (100 * correct / total)
+
+
+# #     for data, lengths, labels in data_iter:
+# #         data_batch, length_batch, label_batch = Variable(data), Variable(lengths), Variable(labels)
+# #         outputs = model(p1_vec, p2_vec)
+# #         predicted = (outputs.data > 0.5).long().view(-1)
+# #         total += labels.size(0)
+# #         correct += (predicted == labels).sum()
+# #     model.train()
+# #     return (100 * correct / total)
+>>>>>>> fb172a1c28fbc9556c330bbd0248471d1352d790
 
 
 # In[149]:
 
 #### This is demo #####
 # emb_size = 50
-# pretrain_filename_path = '../data'
+# pretrain_filename_path = 'glove.6B.50d.txt'
 # document_filename = 'quora_duplicate_questions.tsv'
 # ignore = True 
 # batch_size = 32
@@ -263,7 +403,7 @@ class pretrain():
 # In[151]:
 
 #### This is demo #####
-# pt = pretrain(emb_size, pretrain_filename_path, document_filename, ignore,batch_size,use_pretrain)
+# pt = pretrain(emb_size, pretrain_filename, document_filename, ignore,batch_size,use_pretrain)
 
 
 # In[145]:
@@ -288,4 +428,5 @@ class pretrain():
 
 # data_iter = pt.batch_iter(pt.matrix_validation, pt.batch_size, pt.use_pretrain)
 # test = next(data_iter)
+
 
