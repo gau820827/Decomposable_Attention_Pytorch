@@ -30,12 +30,12 @@ class embeddinglayer(nn.Module):
         self.embedding_model = mode
 
         print('Load {} vocabularies...'.format(vocab_size))
-        print('Size of embedding layer: {}'.format(loaded_embeddings.shape))
 
         self.embeddings = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
 
         if loaded_embeddings is not None:
             self.embeddings.weight = nn.Parameter(torch.from_numpy(loaded_embeddings).float())
+            print('Size of pre-train embeddings: {}'.format(loaded_embeddings.shape))
         else:
             self.init_weights()
 
