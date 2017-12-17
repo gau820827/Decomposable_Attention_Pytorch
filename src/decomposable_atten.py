@@ -227,8 +227,9 @@ class _F(nn.Module):
 def train_iter(embed_model, model, data_iter, iter_time):
     """Training loop."""
     if TRAIN_EMBED is True:
-        embed_optimizer = optim.Adagrad(embed_model.parameters(), lr=LR)
-    optimizer = optim.Adagrad(model.parameters(), lr=LR)
+        embed_optimizer = optim.Adagrad(embed_model.parameters(), lr=LR, weight_decay=0.00005)
+
+    optimizer = optim.Adagrad(model.parameters(), lr=LR, weight_decay=0.00005)
     lossf = nn.NLLLoss()
 
     print('Start Training!')
