@@ -94,7 +94,12 @@ class pretrain():
                 text_1 = re.sub(r'\s*(\(\d)|(\))\s*', '', line)
                 text_1 = re.split(r'\t+', text_1)
 
-                label = text_1[0]
+                # Work Around with different format
+                if 'train' in path:
+                    label = text_1[3]
+                else:
+                    label = text_1[0]
+
                 p1_tok = [t.lower() for t in nltk.word_tokenize(text_1[1])]
                 p2_tok = [t.lower() for t in nltk.word_tokenize(text_1[2])]
 
