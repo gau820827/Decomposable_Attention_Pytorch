@@ -1,7 +1,50 @@
 """This is the module for char n-gram encoding."""
 
 
-class NgramChar(object):
+class Lang():
+    """A class to summarize encoding information.
+
+    This class will build three dicts:
+    word2index, word2count, and index2word for
+    embedding information. Once a set of data is
+    encoded, we can transform it to corrsponding
+    indexing use the word2index, and map it back
+    using index2word.
+
+    Attributes:
+        word2index: A dict mapping word to index.
+        word2count: A dict mapping word to counts in the corpus.
+        index2word: A dict mapping index to word.
+
+    """
+
+    def __init__(self, name):
+        """Init Lang with a name."""
+        self.name = name
+        self.word2index = {'<PAD>': 0, '<UNK>': 1}
+        self.word2count = {'<PAD>': 0, '<UNK>': 1}
+        self.index2word = {0: '<PAD>', 1: '<UNK>'}
+        self.n_words = 2  # Count <PAD> and <UNK>
+
+    def addword(self, word):
+        """Add a word to the dict."""
+        if word not in self.word2index:
+            self.word2index[word] = self.n_words
+            self.word2count[word] = 1
+            self.index2word[self.n_words] = word
+            self.n_words += 1
+        else:
+            self.word2count[word] += 1
+
+    def getword2index(self, word):
+        """Get the index of the word"""
+        try:
+            return self.word2index[word]
+        except KeyError:
+            return self.word2index['<UNK>']
+
+
+class NgramChar():
     """The class for extracting char n-gram information.
 
     This class is for extracting char n-gram information,
@@ -20,10 +63,10 @@ class NgramChar(object):
         """Init ngramChar with a name."""
         super(NgramChar, self).__init__()
         self.name = name
-        self.chars2index = {'<PAD>': 0}
-        self.index2chars = {0: '<PAD>'}
+        self.chars2index = {'<PAD>': 0, '<UNK>': 1}
+        self.index2chars = {0: '<PAD>', 1: '<UNK>'}
         self.ngram = n
-        self.n_chars = 1
+        self.n_chars = 2
 
     def getchars(self, chars):
         """Get the index of chars."""

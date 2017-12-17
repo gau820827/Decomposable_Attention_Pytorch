@@ -13,6 +13,7 @@ from settings import PRETRAIN_FILE, DOCUMENT_FILE
 from settings import LR, ITER_TIME, BATCH_SIZE
 from settings import GET_LOSS, SAVE_MODEL, OUTPUT_FILE
 from settings import EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_DIM, DROPOUT
+from settings import EMBEDDING_STYLE
 
 
 use_cuda = torch.cuda.is_available()
@@ -28,13 +29,16 @@ class DecomposableAttention(nn.Module):
     """
 
     def __init__(self, embedding_dim, hidden_dim, output_dim, 
-                 loaded_embeddings, mode='glove'):
+                 loaded_embeddings=None, vocab_size=0, mode='glove'):
         super(DecomposableAttention, self).__init__()
+        assert vocab_size != 0, "No embedding words, something must be wrong!"
 
         # Choose word_embedding model
         self.embedding_model = mode
 
-        vocab_size = loaded_embeddings.shape[0]
+        print(vocab_size)
+        print(loaded_embeddings.shape)
+
         self.embeddings = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
         self.embeddings.weight = nn.Parameter(torch.from_numpy(loaded_embeddings).float())
 
@@ -200,6 +204,99 @@ class _F(nn.Module):
             layer.bias.data.fill_(0)
 
 
+## TODO: Evaluation Loop
+
+# def evaluate(model, data_iter):
+#     """The helper function for evaluation."""
+#     model.eval()
+#     correct = 0
+#     total = 0
+#     for i in range(len(data_iter)):
+#         vectors, labels = next(data_iter[i])
+#         vectors = Variable(torch.stack(vectors).squeeze())
+#         labels = torch.stack(labels).squeeze()
+#         output = model(vectors)
+#         _, predicted = torch.max(output.data, 1)
+#         total += labels.size(0)
+#         correct += (predicted == labels).sum()
+#     return correct / float(total)
+
+
+def train_iter(model, data_iter, iter_time):
+    """Training loop."""
+    optimizer = optim.Adagrad(model.parameters(), lr=LR)
+    lossf = nn.CrossEntropyLoss()
+
+    print('Start Training!')
+    total_loss = 0
+    for iteration in range(1, iter_time + 1):
+        # catch the data
+        p1_vec, p2_vec, p1_str, p2_str, label = next(data_iter)
+        p1_vec = Variable(p1_vec)
+        p2_vec = Variable(p2_vec)
+        label = Variable(label)
+
+        if use_cuda:
+            p1_vec = p1_vec.cuda()
+            p2_vec = p2_vec.cuda()
+            label = label.cuda()
+
+        model.zero_grad()
+        out = model(p1_vec, p2_vec)
+
+        loss = lossf(out, label)
+
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.data[0]
+
+        if iteration % GET_LOSS == 0:
+            print("Iter %i : Avg Loss %f" % (iteration, total_loss / GET_LOSS))
+            total_loss = 0
+
+        if iteration % SAVE_MODEL == 0:
+            torch.save(model.state_dict(), "{}_{}".format(OUTPUT_FILE, iteration))
+            print("Save the model at iter {}".format(iteration))
+
+        # if step % 100 == 0:
+        #     print("Step %i; Loss %f; Train acc: %f; Dev acc %f"
+        #           % (step, loss.data[0], evaluate(model, train_eval_iter), evaluate(model, dev_iter)))
+
+
+def train(embedding_dim, hidden_dim, output_dim, batch_size,
+          usepretrain, pretrain_emb_size, pretrain_filename,
+          document_filename, iter_time, embedding_style):
+    """The core part of training the model.
+
+    First, we will initialize the model based on given parameters.
+    Second, we will decide whether to use pre-train word vector or not.
+    Third, we load the dataset.
+
+    """
+    pt = pretrain(pretrain_emb_size, pretrain_filename, document_filename,
+                  ignore, batch_size, usepretrain, embedding_style)
+    data_iter = pt.batch_iter(pt.matrix_train, pt.batch_size)
+
+    print("Data loaded......")
+
+    if usepretrain is True:
+        model = DecomposableAttention(embedding_dim, hidden_dim, output_dim,
+                                      loaded_embeddings=pt.loaded_embeddings,
+                                      vocab_size=pt.emblang.n_words)
+    else:
+        model = DecomposableAttention(embedding_dim, hidden_dim, output_dim,
+                                      vocab_size=pt.corpuslang.n_words)
+
+    model.double()
+
+    if use_cuda:
+        model.cuda()
+
+    train_iter(model, data_iter, iter_time)
+
+
+# These are function for testing
 def mini_train(pair_a, pair_b, target, model):
     optimizer = optim.Adam(model.parameters())
     lossf = nn.CrossEntropyLoss()
@@ -283,99 +380,13 @@ def charngram_test():
     mini_train(a, b, target, model)
 
 
-## TODO: Evaluation Loop
-
-# def evaluate(model, data_iter):
-#     """The helper function for evaluation."""
-#     model.eval()
-#     correct = 0
-#     total = 0
-#     for i in range(len(data_iter)):
-#         vectors, labels = next(data_iter[i])
-#         vectors = Variable(torch.stack(vectors).squeeze())
-#         labels = torch.stack(labels).squeeze()
-#         output = model(vectors)
-#         _, predicted = torch.max(output.data, 1)
-#         total += labels.size(0)
-#         correct += (predicted == labels).sum()
-#     return correct / float(total)
-
-
-def train_iter(model, data_iter, iter_time):
-    """Training loop."""
-    optimizer = optim.Adagrad(model.parameters(), lr=LR)
-    lossf = nn.CrossEntropyLoss()
-
-    print('Start Training!')
-    total_loss = 0
-    for iteration in range(1, iter_time + 1):
-        # catch the data
-        p1_vec, p2_vec, p1_str, p2_str, label = next(data_iter)
-        p1_vec = Variable(p1_vec)
-        p2_vec = Variable(p2_vec)
-        label = Variable(label)
-
-        if use_cuda:
-            p1_vec = p1_vec.cuda()
-            p2_vec = p2_vec.cuda()
-            label = label.cuda()
-
-        model.zero_grad()
-        out = model(p1_vec, p2_vec)
-
-        loss = lossf(out, label)
-
-        loss.backward()
-        optimizer.step()
-
-        total_loss += loss.data[0]
-
-        if iteration % GET_LOSS == 0:
-            print("Iter %i : Avg Loss %f" % (iteration, total_loss / GET_LOSS))
-            total_loss = 0
-
-        if iteration % SAVE_MODEL == 0:
-            torch.save(model.state_dict(), "{}_{}".format(OUTPUT_FILE, iteration))
-            print("Save the model at iter {}".format(iteration))
-
-        # if step % 100 == 0:
-        #     print("Step %i; Loss %f; Train acc: %f; Dev acc %f"
-        #           % (step, loss.data[0], evaluate(model, train_eval_iter), evaluate(model, dev_iter)))
-
-
-def train(embedding_dim, hidden_dim, output_dim, batch_size,
-          usepretrain, pretrain_emb_size, pretrain_filename,
-          document_filename, ignore, iter_time):
-    """The core part of training the model.
-
-    First, we will initialize the model based on given parameters.
-    Second, we will decide whether to use pre-train word vector or not.
-    Third, we load the dataset.
-
-    """
-    if usepretrain:
-        pt = pretrain(pretrain_emb_size, pretrain_filename, document_filename,
-                      ignore, batch_size, usepretrain)
-        data_iter = pt.batch_iter(pt.matrix_train, pt.batch_size, usepretrain)
-
-    print("Data loaded......")
-
-    model = DecomposableAttention(embedding_dim, hidden_dim, output_dim, pt.loaded_embeddings)
-
-    model.double()
-
-    if use_cuda:
-        model.cuda()
-
-    train_iter(model, data_iter, iter_time)
-
-
 def showconfig():
     """Display the configuration."""
     print("EMBEDDING_SIZE = {}\nLR = {}\nITER_TIME = {}\nBATCH_SIZE = {}".format(
         EMBEDDING_SIZE, LR, ITER_TIME, BATCH_SIZE))
     print("DROPOUT_RATE = {}".format(DROPOUT))
     print("USE_PRETRAIN = {}\nOUTPUT_FILE = {}".format(PRETRAIN_FILE, OUTPUT_FILE))
+    print("EMBEDDING_STYLE = {}".format(EMBEDDING_STYLE))
 
 
 if __name__ == '__main__':
@@ -386,6 +397,7 @@ if __name__ == '__main__':
     ignore = True
 
     # Parameter for core model
+    embedding_style = EMBEDDING_STYLE
     embedding_dim = EMBEDDING_SIZE
     hidden_dim = HIDDEN_SIZE
     output_dim = OUTPUT_DIM
@@ -407,5 +419,5 @@ if __name__ == '__main__':
 
     # Main train loop
     train(embedding_dim, hidden_dim, output_dim, batch_size, usepretrain,
-          pretrain_emb_size, pretrain_filename, document_filename, ignore,
-          iter_time)
+          pretrain_emb_size, pretrain_filename, document_filename, iter_time,
+          embedding_style)
