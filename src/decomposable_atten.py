@@ -13,10 +13,45 @@ from settings import PRETRAIN_FILE, DOCUMENT_FILE
 from settings import LR, ITER_TIME, BATCH_SIZE
 from settings import GET_LOSS, SAVE_MODEL, OUTPUT_FILE
 from settings import EMBEDDING_SIZE, HIDDEN_SIZE, OUTPUT_DIM, DROPOUT
-from settings import EMBEDDING_STYLE
+from settings import EMBEDDING_STYLE, TRAIN_EMBED
 
 
 use_cuda = torch.cuda.is_available()
+
+
+class embeddinglayer(nn.Module):
+    """The layer for embedding sentences"""
+    def __init__(self, embedding_dim, loaded_embeddings=None, vocab_size=0, train_embed=TRAIN_EMBED,
+                 mode='glove'):
+        super(embeddinglayer, self).__init__()
+        assert vocab_size != 0, "No embedding words, something must be wrong!"
+
+        # Choose word_embedding model
+        self.embedding_model = mode
+
+        print('Load {} vocabularies...'.format(vocab_size))
+        print('Size of embedding layer: {}'.format(loaded_embeddings.shape))
+
+        self.embeddings = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
+
+        if loaded_embeddings is not None:
+            self.embeddings.weight = nn.Parameter(torch.from_numpy(loaded_embeddings).float())
+        else:
+            self.init_weights()
+
+        # Whether to train the embedding layer or not
+        self.train_embed = train_embed
+        self.embeddings.weight.requires_grad = train_embed
+
+    def forward(self, x1, x2):
+        # Get the embedding
+        x1 = self.embeddings(x1)
+        x2 = self.embeddings(x2)
+        return x1, x2
+
+    def init_weights(self):
+        initrange = 0.1
+        self.embeddings.weight.data.uniform_(-initrange, initrange)
 
 
 class DecomposableAttention(nn.Module):
@@ -27,27 +62,17 @@ class DecomposableAttention(nn.Module):
     2. char_n-gram: Use char n-gram encodings
 
     """
-
-    def __init__(self, embedding_dim, hidden_dim, output_dim, 
-                 loaded_embeddings=None, vocab_size=0, mode='glove'):
+    def __init__(self, embedding_dim, hidden_dim, output_dim):
         super(DecomposableAttention, self).__init__()
-        assert vocab_size != 0, "No embedding words, something must be wrong!"
 
-        # Choose word_embedding model
-        self.embedding_model = mode
+        # Layers of the fucking model
+        self.projection = nn.Linear(embedding_dim, hidden_dim)
 
-        print(vocab_size)
-        print(loaded_embeddings.shape)
+        self.attend = _Attend(hidden_dim)
+        self.compare = _Compare(hidden_dim)
+        self.aggregate = _Aggregate(hidden_dim)
 
-        self.embeddings = nn.Embedding(vocab_size, embedding_dim, padding_idx=0)
-        self.embeddings.weight = nn.Parameter(torch.from_numpy(loaded_embeddings).float())
-
-        # self.projection = nn.Linear(embedding_dim, hidden_dim)
-        self.attend = _Attend(embedding_dim, hidden_dim)
-        self.compare = _Compare(embedding_dim, hidden_dim)
-        self.aggregate = _Aggregate(embedding_dim, hidden_dim, output_dim)
-
-        # m.weight.requires_grad=False
+        self.final_linear = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x1, x2):
         """ The forward process of the core model.
@@ -61,112 +86,85 @@ class DecomposableAttention(nn.Module):
 
         """
 
-        if self.embedding_model != 'glove':
-            # Use self embedding layer
+        # Project the embedding vocabulary
+        x1 = self.projection(x1)
+        x2 = self.projection(x2)
 
-            # Chunk the inputs
-            x1 = torch.chunk(x1, x1.size()[0], dim=0)
-            x2 = torch.chunk(x2, x2.size()[0], dim=0)
-
-            embed_x1 = []
-            embed_x2 = []
-
-            for sentence in x1:
-                sentence = torch.squeeze(sentence)
-                sentence = self.embeddings(sentence)
-                embed_x1.append(sentence)
-
-            embed_x1 = torch.stack(embed_x1, dim=0)
-            embed_x1 = torch.sum(embed_x1, dim=2)   # Sum up dim 2, size of tokens
-
-            for sentence in x2:
-                sentence = torch.squeeze(sentence)
-                sentence = self.embeddings(sentence)
-                embed_x2.append(sentence)
-
-            embed_x2 = torch.stack(embed_x2, dim=0)
-            embed_x2 = torch.sum(embed_x2, dim=2)   # Sum up dim 2, size of tokens
-
-            x1 = embed_x1
-            x2 = embed_x2
-
-        # x1 = self.projection(x1)
-        # x2 = self.projection(x2)
-
-        x1 = self.embeddings(x1)
-        x2 = self.embeddings(x2)
+        # Feed to the model
         alpha, beta = self.attend(x1, x2)
         v1, v2 = self.compare(alpha, beta, x1, x2)
         out = self.aggregate(v1, v2)
-        return out
+        out = self.final_linear(out)
+        return F.log_softmax(out)
 
 
 class _Attend(nn.Module):
     """Attend part for the model."""
-    def __init__(self, embedding_dim, hidden_dim):
+    def __init__(self, hidden_dim):
         super(_Attend, self).__init__()
-        self.f = _F(embedding_dim, hidden_dim, hidden_dim)
+        self.hidden_size = hidden_dim
+        self.f = _F(hidden_dim, hidden_dim, hidden_dim)
 
     def forward(self, x1, x2):
+
+        len1 = x1.size()[1]
+        len2 = x2.size()[1]
+
         # Unnormalized attend weights
-        fa = self.f(x1)
-        fb = self.f(x2)
-        e = torch.exp(torch.matmul(fa, torch.transpose(fb, 1, 2)))
+        f1 = self.f(x1)
+        f2 = self.f(x2)
 
         # Normalized attend weights
-        beta = [0 for i in range(x1.size()[1])]
-        for i in range(x1.size()[1]):
-            n = torch.sum(e[:, i, :], dim=1)
+        f1 = f1.view(-1, len1, self.hidden_size)
+        # batch_size x len1 x hidden_size
+        f2 = f2.view(-1, len2, self.hidden_size)
+        # batch_size x len2 x hidden_size
 
-            n = n.view(-1, 1)
+        score1 = torch.bmm(f1, torch.transpose(f2, 1, 2))
+        # e_{ij} batch_size x len1 x len2
+        prob1 = F.softmax(score1.view(-1, len2)).view(-1, len1, len2)
+        # batch_size x len1 x len2
 
-            seq = [torch.div(x, n[idx, :]).view(1, -1) for idx, x in enumerate(e[:, i, :])]
+        score2 = torch.transpose(score1.contiguous(), 1, 2)
+        score2 = score2.contiguous()
+        # e_{ji} batch_size x len2 x len1
+        prob2 = F.softmax(score2.view(-1, len1)).view(-1, len2, len1)
+        # batch_size x len2 x len1
 
-            val = torch.cat(seq, dim=0).view((x1.size()[0], -1, 1))
-            val = torch.mul(val, x2)
-            val = torch.sum(val, dim=1)
-            beta[i] = val
-
-        beta = torch.stack(beta, dim=1)
-
-        alpha = [0 for i in range(x2.size()[1])]
-        for j in range(x2.size()[1]):
-            n = torch.sum(e[:, :, j], dim=1)
-            n = n.view(-1, 1)
-
-            seq = [torch.div(x, n[idx, :]).view(1, -1) for idx, x in enumerate(e[:, :, j])]
-            val = torch.cat(seq, dim=0).view((x2.size()[0], -1, 1))
-            val = torch.mul(val, x1)
-            val = torch.sum(val, dim=1)
-            alpha[j] = val
-
-        alpha = torch.stack(alpha, dim=1)
+        beta = torch.bmm(prob1, x2)
+        alpha = torch.bmm(prob2, x1)
 
         return alpha, beta
 
 
 class _Compare(nn.Module):
     """Compare part for the model"""
-    def __init__(self, embedding_dim, hidden_dim):
+    def __init__(self, hidden_dim):
         super(_Compare, self).__init__()
-        self.g = _F(embedding_dim, hidden_dim, hidden_dim)
+        self.g = _F(hidden_dim * 2, hidden_dim, hidden_dim)
 
     def forward(self, alpha, beta, x1, x2):
         # Seperately compare the aligned phrases
-        v1 = torch.cat((x1, beta), dim=1)
-        v1 = self.g(v1)
 
-        v2 = torch.cat((x2, alpha), dim=1)
+        v1 = torch.cat((x1, beta), dim=2).view(-1, hidden_dim * 2)
+        # batch_size x len1 x (hidden_size x 2)
+        v2 = torch.cat((x2, alpha), dim=2).view(-1, hidden_dim * 2)
+        # batch_size x len2 x (hidden_size x 2)
+
+        v1 = self.g(v1)
         v2 = self.g(v2)
+
+        v1 = v1.view(-1, x1.size()[1], hidden_dim)
+        v2 = v2.view(-1, x2.size()[1], hidden_dim)
 
         return v1, v2
 
 
 class _Aggregate(nn.Module):
     """Aggregate part for the model"""
-    def __init__(self, embedding_dim, hidden_dim, output_dim):
+    def __init__(self, hidden_dim):
         super(_Aggregate, self).__init__()
-        self.h = _F(hidden_dim * 2, hidden_dim, output_dim)
+        self.h = _F(hidden_dim * 2, hidden_dim, hidden_dim)
 
     def forward(self, v1, v2):
         v1 = torch.sum(v1, dim=1)
@@ -193,6 +191,7 @@ class _F(nn.Module):
         out = F.relu(out)
         out = F.dropout(out, p=DROPOUT)
         out = self.hidden3(out)
+        out = F.relu(out)
         return out
 
     def init_weights(self):
@@ -222,10 +221,12 @@ class _F(nn.Module):
 #     return correct / float(total)
 
 
-def train_iter(model, data_iter, iter_time):
+def train_iter(embed_model, model, data_iter, iter_time):
     """Training loop."""
+    if TRAIN_EMBED is True:
+        embed_optimizer = optim.Adagrad(embed_model.parameters(), lr=LR)
     optimizer = optim.Adagrad(model.parameters(), lr=LR)
-    lossf = nn.CrossEntropyLoss()
+    lossf = nn.NLLLoss()
 
     print('Start Training!')
     total_loss = 0
@@ -241,12 +242,19 @@ def train_iter(model, data_iter, iter_time):
             p2_vec = p2_vec.cuda()
             label = label.cuda()
 
+        if TRAIN_EMBED is True:
+            embed_model.zero_grad()
         model.zero_grad()
-        out = model(p1_vec, p2_vec)
+
+        # Feed to the network
+        p1_emb, p2_emb = embed_model(p1_vec, p2_vec)
+        out = model(p1_emb, p2_emb)
 
         loss = lossf(out, label)
-
         loss.backward()
+
+        if TRAIN_EMBED is True:
+            embed_optimizer.step()
         optimizer.step()
 
         total_loss += loss.data[0]
@@ -256,6 +264,8 @@ def train_iter(model, data_iter, iter_time):
             total_loss = 0
 
         if iteration % SAVE_MODEL == 0:
+            if TRAIN_EMBED is True:
+                torch.save(embed_model.state_dict(), "embed_{}_{}".format(OUTPUT_FILE, iteration))
             torch.save(model.state_dict(), "{}_{}".format(OUTPUT_FILE, iteration))
             print("Save the model at iter {}".format(iteration))
 
@@ -275,25 +285,29 @@ def train(embedding_dim, hidden_dim, output_dim, batch_size,
 
     """
     pt = pretrain(pretrain_emb_size, pretrain_filename, document_filename,
-                  ignore, batch_size, usepretrain, embedding_style)
+                  batch_size, usepretrain, embedding_style)
     data_iter = pt.batch_iter(pt.matrix_train, pt.batch_size)
 
     print("Data loaded......")
 
     if usepretrain is True:
-        model = DecomposableAttention(embedding_dim, hidden_dim, output_dim,
-                                      loaded_embeddings=pt.loaded_embeddings,
-                                      vocab_size=pt.emblang.n_words)
+        embed_model = embeddinglayer(embedding_dim,
+                                     loaded_embeddings=pt.loaded_embeddings,
+                                     vocab_size=pt.emblang.n_words)
+        model = DecomposableAttention(embedding_dim, hidden_dim, output_dim)
     else:
-        model = DecomposableAttention(embedding_dim, hidden_dim, output_dim,
-                                      vocab_size=pt.corpuslang.n_words)
+        embed_model = embeddinglayer(embedding_dim,
+                                     vocab_size=pt.corpuslang.n_words)
+        model = DecomposableAttention(embedding_dim, hidden_dim, output_dim)
 
+    embed_model.double()
     model.double()
 
     if use_cuda:
+        embed_model.cuda()
         model.cuda()
 
-    train_iter(model, data_iter, iter_time)
+    train_iter(embed_model, model, data_iter, iter_time)
 
 
 # These are function for testing
@@ -386,7 +400,7 @@ def showconfig():
         EMBEDDING_SIZE, LR, ITER_TIME, BATCH_SIZE))
     print("DROPOUT_RATE = {}".format(DROPOUT))
     print("USE_PRETRAIN = {}\nOUTPUT_FILE = {}".format(PRETRAIN_FILE, OUTPUT_FILE))
-    print("EMBEDDING_STYLE = {}".format(EMBEDDING_STYLE))
+    print("EMBEDDING_STYLE = {}\nTRAIN_EMBED = {}".format(EMBEDDING_STYLE, TRAIN_EMBED))
 
 
 if __name__ == '__main__':
@@ -394,7 +408,6 @@ if __name__ == '__main__':
     # Parameters for loading pre-train word
     pretrain_filename = PRETRAIN_FILE
     document_filename = DOCUMENT_FILE
-    ignore = True
 
     # Parameter for core model
     embedding_style = EMBEDDING_STYLE

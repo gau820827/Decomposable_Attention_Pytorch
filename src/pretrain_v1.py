@@ -31,7 +31,7 @@ class pretrain():
         self.emblang = Lang('emb')
         self.charlang = NgramChar('charn')
 
-        self.train_set = self.load_sst_data(sst_home + 'small_train.tsv')
+        self.train_set = self.load_sst_data(sst_home + 'train.tsv')
         self.validation_set = self.load_sst_data(sst_home + 'dev.tsv')
         self.test_set = self.load_sst_data(sst_home + 'test.tsv')
 
