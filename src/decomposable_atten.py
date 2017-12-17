@@ -66,13 +66,14 @@ class DecomposableAttention(nn.Module):
         super(DecomposableAttention, self).__init__()
 
         # Layers of the fucking model
-        self.projection = nn.Linear(embedding_dim, hidden_dim)
+        self.projection = nn.Linear(embedding_dim, hidden_dim, bias=False)
 
         self.attend = _Attend(hidden_dim)
         self.compare = _Compare(hidden_dim)
         self.aggregate = _Aggregate(hidden_dim)
 
         self.final_linear = nn.Linear(hidden_dim, output_dim)
+        self.prob = nn.LogSoftmax()
 
     def forward(self, x1, x2):
         """ The forward process of the core model.
@@ -95,7 +96,8 @@ class DecomposableAttention(nn.Module):
         v1, v2 = self.compare(alpha, beta, x1, x2)
         out = self.aggregate(v1, v2)
         out = self.final_linear(out)
-        return F.log_softmax(out)
+        out = self.prob(out)
+        return out
 
 
 class _Attend(nn.Module):
@@ -184,7 +186,8 @@ class _F(nn.Module):
         self.init_weights()
 
     def forward(self, x):
-        out = self.hidden1(x)
+        out = F.dropout(x, p=DROPOUT)
+        out = self.hidden1(out)
         out = F.relu(out)
         out = F.dropout(out, p=DROPOUT)
         out = self.hidden2(out)
